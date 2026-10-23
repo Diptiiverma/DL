@@ -1,0 +1,4146 @@
+
+# ============================================
+# PRACTICAL 1: TENSORFLOW AND MNIST
+# ============================================
+
+import tensorflow as tf
+import matplotlib.pyplot as plt
+
+print("TensorFlow Version:", tf.__version__)
+
+# 1. Basic Tensor Operations
+a = tf.constant([[1, 2], [3, 4]])
+b = tf.constant([[5, 6], [7, 8]])
+
+print("\nTensor A:\n", a.numpy())
+print("Tensor B:\n", b.numpy())
+print("Addition:\n", tf.add(a, b).numpy())
+print("Subtraction:\n", tf.subtract(a, b).numpy())
+print("Multiplication:\n", tf.multiply(a, b).numpy())
+print("Matrix Multiplication:\n", tf.matmul(a, b).numpy())
+print("Transpose:\n", tf.transpose(a).numpy())
+print("Shape:", a.shape)
+
+# 2. Load MNIST Dataset
+(x_train, y_train), (x_test, y_test) = (
+    tf.keras.datasets.mnist.load_data()
+)
+
+# Normalize pixel values
+x_train = x_train.astype("float32") / 255.0
+x_test = x_test.astype("float32") / 255.0
+
+print("\nTraining data:", x_train.shape)
+print("Testing data:", x_test.shape)
+
+# Display sample digit
+plt.imshow(x_train[0], cmap="gray")
+plt.title(f"Actual Digit: {y_train[0]}")
+plt.axis("off")
+plt.show()
+
+# 3. Single-Layer Perceptron
+perceptron = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(28, 28)),
+    tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(10, activation="softmax")
+])
+
+perceptron.compile(
+    optimizer="sgd",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+print("\nTraining Single-Layer Perceptron...")
+perceptron.fit(
+    x_train, y_train,
+    epochs=5,
+    batch_size=32,
+    validation_split=0.1,
+    verbose=1
+)
+
+loss_p, acc_p = perceptron.evaluate(
+    x_test, y_test, verbose=0
+)
+
+print(f"Perceptron Test Accuracy: {acc_p * 100:.2f}%")
+
+# 4. Multi-Layer Perceptron (MLP)
+mlp = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(28, 28)),
+    tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(128, activation="relu"),
+    tf.keras.layers.Dense(64, activation="relu"),
+    tf.keras.layers.Dense(10, activation="softmax")
+])
+
+mlp.compile(
+    optimizer="adam",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+print("\nTraining MLP...")
+mlp.fit(
+    x_train, y_train,
+    epochs=5,
+    batch_size=32,
+    validation_split=0.1,
+    verbose=1
+)
+
+loss_mlp, acc_mlp = mlp.evaluate(
+    x_test, y_test, verbose=0
+)
+
+print(f"MLP Test Accuracy: {acc_mlp * 100:.2f}%")
+
+# 5. Compare Accuracy
+print("\n===== ACCURACY COMPARISON =====")
+print(f"Single-Layer Perceptron: {acc_p * 100:.2f}%")
+print(f"MLP:                     {acc_mlp * 100:.2f}%")
+
+plt.figure(figsize=(6, 4))
+plt.bar(
+    ["Perceptron", "MLP"],
+    [acc_p * 100, acc_mlp * 100]
+)
+plt.ylabel("Test Accuracy (%)")
+plt.title("MNIST Model Accuracy Comparison")
+plt.ylim(0, 100)
+plt.show()
+
+# 6. Sample Predictions
+predictions = mlp.predict(x_test[:10], verbose=0)
+predicted_labels = tf.argmax(predictions, axis=1).numpy()
+
+plt.figure(figsize=(12, 4))
+
+for i in range(10):
+    plt.subplot(2, 5, i + 1)
+    plt.imshow(x_test[i], cmap="gray")
+    plt.title(
+        f"Actual: {y_test[i]}\nPredicted: {predicted_labels[i]}"
+    )
+    plt.axis("off")
+
+plt.tight_layout()
+plt.show()
+
+print("\nPractical 1 completed successfully!")
+
+
+
+
+# ============================================
+# PRACTICAL 2: CALIFORNIA HOUSING REGRESSION
+# ============================================
+
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+import matplotlib.pyplot as plt
+
+from sklearn.datasets import fetch_california_housing
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
+np.random.seed(42)
+tf.random.set_seed(42)
+
+# 1. Load Dataset
+housing = fetch_california_housing()
+
+X = housing.data
+y = housing.target
+
+print("Dataset loaded successfully!")
+print("Features:", housing.feature_names)
+print("Dataset shape:", X.shape)
+print("Target shape:", y.shape)
+
+# 2. Split into training, validation and testing sets
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+X_train, X_val, y_train, y_val = train_test_split(
+    X_train, y_train, test_size=0.2, random_state=42
+)
+
+# Standardize features
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_val = scaler.transform(X_val)
+X_test = scaler.transform(X_test)
+
+print("\nTraining samples:", len(X_train))
+print("Validation samples:", len(X_val))
+print("Testing samples:", len(X_test))
+
+# 3. Build Model
+def build_model(model_type="Baseline"):
+
+    if model_type == "L1":
+        regularizer = tf.keras.regularizers.L1(0.01)
+    elif model_type == "L2":
+        regularizer = tf.keras.regularizers.L2(0.01)
+    else:
+        regularizer = None
+
+    model = tf.keras.Sequential([
+        tf.keras.layers.Input(shape=(X_train.shape[1],)),
+        tf.keras.layers.Dense(
+            64, activation="relu",
+            kernel_regularizer=regularizer
+        )
+    ])
+
+    if model_type == "Dropout":
+        model.add(tf.keras.layers.Dropout(0.3))
+
+    model.add(tf.keras.layers.Dense(
+        32, activation="relu",
+        kernel_regularizer=regularizer
+    ))
+
+    if model_type == "Dropout":
+        model.add(tf.keras.layers.Dropout(0.3))
+
+    model.add(tf.keras.layers.Dense(1))
+
+    model.compile(
+        optimizer=tf.keras.optimizers.SGD(learning_rate=0.01),
+        loss="mse",
+        metrics=["mae"]
+    )
+
+    return model
+
+# 4. Train and Evaluate Models
+model_types = ["Baseline", "L1", "L2", "Dropout"]
+models = {}
+histories = {}
+results = []
+
+for model_type in model_types:
+
+    print("\nTraining model:", model_type)
+    model = build_model(model_type)
+
+    early_stop = tf.keras.callbacks.EarlyStopping(
+        monitor="val_loss",
+        patience=8,
+        restore_best_weights=True
+    )
+
+    history = model.fit(
+        X_train, y_train,
+        validation_data=(X_val, y_val),
+        epochs=100,
+        batch_size=32,
+        callbacks=[early_stop],
+        verbose=0
+    )
+
+    models[model_type] = model
+    histories[model_type] = history
+
+    predictions = model.predict(X_test, verbose=0).flatten()
+
+    mse = mean_squared_error(y_test, predictions)
+    rmse = np.sqrt(mse)
+    mae = mean_absolute_error(y_test, predictions)
+    r2 = r2_score(y_test, predictions)
+
+    results.append({
+        "Model": model_type,
+        "Test MSE": mse,
+        "Test RMSE": rmse,
+        "Test MAE": mae,
+        "R2 Score": r2
+    })
+
+    print(f"Test RMSE: {rmse:.4f}")
+    print(f"Test MAE:  {mae:.4f}")
+    print(f"R2 Score:  {r2:.4f}")
+
+# 5. Compare Results
+results_df = pd.DataFrame(results)
+
+print("\n===== MODEL COMPARISON =====")
+print(results_df.round(4).to_string(index=False))
+
+best_model_name = results_df.loc[
+    results_df["Test RMSE"].idxmin(), "Model"
+]
+print("\nBest model by Test RMSE:", best_model_name)
+
+# 6. Plot Training vs Validation Loss
+plt.figure(figsize=(11, 6))
+
+for name, history in histories.items():
+    plt.plot(history.history["loss"], label=name + " Train")
+    plt.plot(
+        history.history["val_loss"],
+        linestyle="--",
+        label=name + " Validation"
+    )
+
+plt.title("Training and Validation Loss")
+plt.xlabel("Epoch")
+plt.ylabel("MSE Loss")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# 7. Compare Test RMSE
+plt.figure(figsize=(8, 5))
+plt.bar(results_df["Model"], results_df["Test RMSE"])
+plt.title("Test RMSE Comparison")
+plt.ylabel("RMSE (lower is better)")
+plt.show()
+
+# 8. Predict House Prices
+best_model = models[best_model_name]
+predictions = best_model.predict(X_test[:10], verbose=0).flatten()
+
+print("\n===== SAMPLE HOUSE PRICE PREDICTIONS =====")
+print("Prices are in US dollars.")
+
+for actual, predicted in zip(y_test[:10], predictions):
+    print(
+        f"Actual: ${actual * 100000:,.0f} | "
+        f"Predicted: ${predicted * 100000:,.0f}"
+    )
+
+print("\nPractical 2 completed successfully!")
+
+
+
+
+
+# =====================================================
+# PRACTICAL 3: CNN IMAGE CLASSIFICATION USING CIFAR-10
+# =====================================================
+
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+
+# Set random seed
+tf.random.set_seed(42)
+np.random.seed(42)
+
+print("TensorFlow Version:", tf.__version__)
+
+# =====================================================
+# 1. LOAD CIFAR-10 DATASET
+# =====================================================
+
+(x_train, y_train), (x_test, y_test) = (
+    tf.keras.datasets.cifar10.load_data()
+)
+
+print("\nTraining images:", x_train.shape)
+print("Testing images:", x_test.shape)
+
+# CIFAR-10 contains 10 classes
+class_names = [
+    "airplane", "automobile", "bird", "cat", "deer",
+    "dog", "frog", "horse", "ship", "truck"
+]
+
+# =====================================================
+# 2. PREPROCESS THE DATA
+# =====================================================
+
+# Normalize pixel values from 0-255 to 0-1
+x_train = x_train.astype("float32") / 255.0
+x_test = x_test.astype("float32") / 255.0
+
+# Convert labels to 1D arrays
+y_train = y_train.flatten()
+y_test = y_test.flatten()
+
+print("\nPreprocessing completed!")
+print("Image shape:", x_train.shape[1:])
+print("Number of classes:", len(class_names))
+
+# Display sample images
+plt.figure(figsize=(10, 5))
+
+for i in range(10):
+    plt.subplot(2, 5, i + 1)
+    plt.imshow(x_train[i])
+    plt.title(class_names[y_train[i]])
+    plt.axis("off")
+
+plt.tight_layout()
+plt.show()
+
+# =====================================================
+# 3. BUILD CNN MODEL
+# =====================================================
+
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(32, 32, 3)),
+
+    # First convolution block
+    tf.keras.layers.Conv2D(
+        32, (3, 3), activation="relu", padding="same"
+    ),
+    tf.keras.layers.MaxPooling2D((2, 2)),
+
+    # Second convolution block
+    tf.keras.layers.Conv2D(
+        64, (3, 3), activation="relu", padding="same"
+    ),
+    tf.keras.layers.MaxPooling2D((2, 2)),
+
+    # Third convolution block
+    tf.keras.layers.Conv2D(
+        128, (3, 3), activation="relu", padding="same"
+    ),
+    tf.keras.layers.MaxPooling2D((2, 2)),
+
+    # Classification layers
+    tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(128, activation="relu"),
+
+    # Dropout helps reduce overfitting
+    tf.keras.layers.Dropout(0.5),
+
+    # Output layer: 10 classes
+    tf.keras.layers.Dense(10, activation="softmax")
+])
+
+model.summary()
+
+# =====================================================
+# 4. COMPILE THE MODEL
+# =====================================================
+
+model.compile(
+    optimizer="adam",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+# =====================================================
+# 5. SET TRAINING PARAMETERS
+# =====================================================
+
+epochs = 15
+batch_size = 64
+
+early_stop = tf.keras.callbacks.EarlyStopping(
+    monitor="val_loss",
+    patience=3,
+    restore_best_weights=True
+)
+
+# =====================================================
+# 6. TRAIN THE CNN
+# =====================================================
+
+history = model.fit(
+    x_train,
+    y_train,
+    epochs=epochs,
+    batch_size=batch_size,
+    validation_split=0.1,
+    callbacks=[early_stop],
+    verbose=1
+)
+
+# =====================================================
+# 7. PLOT ACCURACY AND LOSS
+# =====================================================
+
+plt.figure(figsize=(12, 4))
+
+plt.subplot(1, 2, 1)
+plt.plot(history.history["accuracy"], label="Training Accuracy")
+plt.plot(history.history["val_accuracy"], label="Validation Accuracy")
+plt.title("CNN Accuracy")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+
+plt.subplot(1, 2, 2)
+plt.plot(history.history["loss"], label="Training Loss")
+plt.plot(history.history["val_loss"], label="Validation Loss")
+plt.title("CNN Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+
+# =====================================================
+# 8. SAVE THE TRAINED MODEL
+# =====================================================
+
+model.save("cifar10_cnn.keras")
+print("\nModel saved as cifar10_cnn.keras")
+
+# =====================================================
+# 9. RELOAD THE SAVED MODEL
+# =====================================================
+
+loaded_model = tf.keras.models.load_model("cifar10_cnn.keras")
+print("Saved model reloaded successfully!")
+
+# =====================================================
+# 10. EVALUATE THE MODEL
+# =====================================================
+
+test_loss, test_accuracy = loaded_model.evaluate(
+    x_test, y_test, verbose=0
+)
+
+print("\n===== TEST RESULTS =====")
+print(f"Test Loss: {test_loss:.4f}")
+print(f"Test Accuracy: {test_accuracy * 100:.2f}%")
+
+# =====================================================
+# 11. CLASSIFICATION REPORT
+# =====================================================
+
+probabilities = loaded_model.predict(x_test, verbose=0)
+y_pred = np.argmax(probabilities, axis=1)
+
+print("\nClassification Report:")
+print(classification_report(
+    y_test,
+    y_pred,
+    labels=list(range(10)),
+    target_names=class_names,
+    zero_division=0
+))
+
+# =====================================================
+# 12. CONFUSION MATRIX
+# =====================================================
+
+cm = confusion_matrix(y_test, y_pred, labels=list(range(10)))
+
+plt.figure(figsize=(10, 8))
+sns.heatmap(
+    cm,
+    annot=True,
+    fmt="d",
+    cmap="Blues",
+    xticklabels=class_names,
+    yticklabels=class_names
+)
+
+plt.title("CIFAR-10 Confusion Matrix")
+plt.xlabel("Predicted Class")
+plt.ylabel("Actual Class")
+plt.show()
+
+# =====================================================
+# 13. DISPLAY SAMPLE PREDICTIONS
+# =====================================================
+
+plt.figure(figsize=(12, 6))
+
+for i in range(10):
+    predicted_class = y_pred[i]
+    actual_class = y_test[i]
+
+    plt.subplot(2, 5, i + 1)
+    plt.imshow(x_test[i])
+    plt.title(
+        f"Actual: {class_names[actual_class]}\n"
+        f"Predicted: {class_names[predicted_class]}"
+    )
+    plt.axis("off")
+
+plt.tight_layout()
+plt.show()
+
+print("\nPractical completed successfully!")
+
+
+
+
+# ==========================================================
+# PRACTICAL 4: TRANSFER LEARNING - CATS VS DOGS
+# MobileNetV2: Feature Extraction vs Fine-Tuning
+# ==========================================================
+
+import os
+import zipfile
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from tensorflow.keras import layers, Model
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from sklearn.metrics import classification_report
+
+# Reproducibility
+tf.random.set_seed(42)
+np.random.seed(42)
+
+print("TensorFlow Version:", tf.__version__)
+
+# ==========================================================
+# 1. DOWNLOAD AND EXTRACT DATASET
+# ==========================================================
+
+url = (
+    "https://storage.googleapis.com/"
+    "mledu-datasets/cats_and_dogs_filtered.zip"
+)
+
+zip_path = tf.keras.utils.get_file(
+    "cats_and_dogs_filtered.zip",
+    origin=url,
+    extract=False
+)
+
+extract_dir = os.path.join(
+    os.path.dirname(zip_path),
+    "cats_and_dogs_filtered"
+)
+
+if not os.path.exists(extract_dir):
+    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+        zip_ref.extractall(os.path.dirname(zip_path))
+
+train_dir = os.path.join(extract_dir, "train")
+test_dir = os.path.join(extract_dir, "validation")
+
+print("\nDataset downloaded and extracted!")
+
+# ==========================================================
+# 2. LOAD AND PREPROCESS DATA
+# ==========================================================
+
+IMG_SIZE = (160, 160)
+BATCH_SIZE = 32
+
+train_ds = tf.keras.utils.image_dataset_from_directory(
+    train_dir,
+    validation_split=0.2,
+    subset="training",
+    seed=42,
+    image_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    label_mode="binary"
+)
+
+val_ds = tf.keras.utils.image_dataset_from_directory(
+    train_dir,
+    validation_split=0.2,
+    subset="validation",
+    seed=42,
+    image_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    label_mode="binary"
+)
+
+test_ds = tf.keras.utils.image_dataset_from_directory(
+    test_dir,
+    image_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    shuffle=False,
+    label_mode="binary"
+)
+
+class_names = train_ds.class_names
+print("Classes:", class_names)
+
+# Improve input pipeline performance
+AUTOTUNE = tf.data.AUTOTUNE
+
+train_ds = train_ds.prefetch(AUTOTUNE)
+val_ds = val_ds.prefetch(AUTOTUNE)
+test_ds = test_ds.prefetch(AUTOTUNE)
+
+# Display sample images
+images, labels = next(iter(train_ds))
+
+plt.figure(figsize=(10, 5))
+
+for i in range(8):
+    plt.subplot(2, 4, i + 1)
+    plt.imshow(images[i].numpy().astype("uint8"))
+    plt.title(class_names[int(labels[i].numpy()[0])])
+    plt.axis("off")
+
+plt.tight_layout()
+plt.show()
+
+# ==========================================================
+# 3. LOAD PRETRAINED MOBILENETV2
+# ==========================================================
+
+base_model = MobileNetV2(
+    weights="imagenet",
+    include_top=False,
+    input_shape=(160, 160, 3)
+)
+
+# Freeze all pretrained layers for feature extraction
+base_model.trainable = False
+
+print("\nPretrained MobileNetV2 loaded!")
+
+# ==========================================================
+# 4. BUILD TRANSFER LEARNING MODEL
+# ==========================================================
+
+data_augmentation = tf.keras.Sequential([
+    layers.RandomFlip("horizontal"),
+    layers.RandomRotation(0.05),
+    layers.RandomZoom(0.1)
+], name="data_augmentation")
+
+
+def build_transfer_model():
+
+    inputs = layers.Input(shape=(160, 160, 3))
+
+    x = data_augmentation(inputs)
+
+    # MobileNetV2 preprocessing
+    x = layers.Lambda(preprocess_input)(x)
+
+    # Extract pretrained image features
+    x = base_model(x, training=False)
+
+    # Convert feature maps into a feature vector
+    x = layers.GlobalAveragePooling2D()(x)
+
+    x = layers.Dropout(0.3)(x)
+
+    # Binary classification: cat or dog
+    outputs = layers.Dense(1, activation="sigmoid")(x)
+
+    return Model(inputs, outputs)
+
+
+model = build_transfer_model()
+
+# ==========================================================
+# 5. FEATURE EXTRACTION
+# ==========================================================
+
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+    loss="binary_crossentropy",
+    metrics=["accuracy"]
+)
+
+print("\n===== FEATURE EXTRACTION =====")
+model.summary()
+
+history_feature = model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=5,
+    verbose=1
+)
+
+# Evaluate feature extraction model
+feature_loss, feature_accuracy = model.evaluate(
+    test_ds, verbose=0
+)
+
+print(
+    f"\nFeature Extraction Test Accuracy: "
+    f"{feature_accuracy * 100:.2f}%"
+)
+
+# Save the feature extraction model
+model.save("cats_dogs_feature_extraction.keras")
+print("Feature extraction model saved!")
+
+# ==========================================================
+# 6. FINE-TUNING
+# ==========================================================
+
+# Unfreeze the pretrained network
+base_model.trainable = True
+
+# Keep most pretrained layers frozen; train only the last 30
+for layer in base_model.layers[:-30]:
+    layer.trainable = False
+
+# Keep Batch Normalization layers frozen for stability
+for layer in base_model.layers:
+    if isinstance(layer, layers.BatchNormalization):
+        layer.trainable = False
+
+# Recompile with a very small learning rate
+model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=1e-5),
+    loss="binary_crossentropy",
+    metrics=["accuracy"]
+)
+
+print("\n===== FINE-TUNING =====")
+
+history_finetune = model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=5,
+    verbose=1
+)
+
+# Evaluate fine-tuned model
+fine_loss, fine_accuracy = model.evaluate(
+    test_ds, verbose=0
+)
+
+print(
+    f"\nFine-Tuning Test Accuracy: "
+    f"{fine_accuracy * 100:.2f}%"
+)
+
+# Save fine-tuned model
+model.save("cats_dogs_finetuned.keras")
+print("Fine-tuned model saved!")
+
+# ==========================================================
+# 7. COMPARE BOTH APPROACHES
+# ==========================================================
+
+comparison = pd.DataFrame({
+    "Method": ["Feature Extraction", "Fine-Tuning"],
+    "Test Accuracy (%)": [
+        feature_accuracy * 100,
+        fine_accuracy * 100
+    ],
+    "Test Loss": [feature_loss, fine_loss]
+})
+
+print("\n===== MODEL COMPARISON =====")
+print(comparison.round(4).to_string(index=False))
+
+plt.figure(figsize=(7, 5))
+plt.bar(
+    comparison["Method"],
+    comparison["Test Accuracy (%)"]
+)
+plt.ylabel("Test Accuracy (%)")
+plt.title("Feature Extraction vs Fine-Tuning")
+plt.ylim(0, 100)
+plt.show()
+
+# ==========================================================
+# 8. PLOT TRAINING AND VALIDATION ACCURACY
+# ==========================================================
+
+plt.figure(figsize=(10, 5))
+
+plt.plot(
+    history_feature.history["val_accuracy"],
+    label="Feature Extraction"
+)
+
+plt.plot(
+    np.arange(
+        len(history_feature.history["val_accuracy"]),
+        len(history_feature.history["val_accuracy"])
+        + len(history_finetune.history["val_accuracy"])
+    ),
+    history_finetune.history["val_accuracy"],
+    label="Fine-Tuning"
+)
+
+plt.xlabel("Epoch")
+plt.ylabel("Validation Accuracy")
+plt.title("Validation Accuracy Comparison")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# ==========================================================
+# 9. RELOAD SAVED FINE-TUNED MODEL
+# ==========================================================
+
+loaded_model = tf.keras.models.load_model(
+    "cats_dogs_finetuned.keras"
+)
+
+print("\nFine-tuned model reloaded successfully!")
+
+reload_loss, reload_accuracy = loaded_model.evaluate(
+    test_ds, verbose=0
+)
+
+print(
+    f"Reloaded Model Test Accuracy: "
+    f"{reload_accuracy * 100:.2f}%"
+)
+
+# ==========================================================
+# 10. CLASSIFICATION REPORT
+# ==========================================================
+
+y_true = np.concatenate([
+    labels.numpy().flatten() for _, labels in test_ds
+]).astype(int)
+
+probabilities = loaded_model.predict(test_ds, verbose=0).flatten()
+y_pred = (probabilities >= 0.5).astype(int)
+
+print("\n===== CLASSIFICATION REPORT =====")
+print(classification_report(
+    y_true,
+    y_pred,
+    labels=[0, 1],
+    target_names=class_names,
+    zero_division=0
+))
+
+# ==========================================================
+# 11. SHOW SAMPLE PREDICTIONS
+# ==========================================================
+
+sample_images, sample_labels = next(iter(test_ds))
+sample_probabilities = loaded_model.predict(
+    sample_images, verbose=0
+).flatten()
+
+plt.figure(figsize=(12, 6))
+
+for i in range(min(8, len(sample_images))):
+    actual = int(sample_labels[i].numpy()[0])
+    probability = sample_probabilities[i]
+    predicted = int(probability >= 0.5)
+
+    plt.subplot(2, 4, i + 1)
+    plt.imshow(sample_images[i].numpy().astype("uint8"))
+    plt.title(
+        f"Actual: {class_names[actual]}\n"
+        f"Predicted: {class_names[predicted]}"
+    )
+    plt.axis("off")
+
+plt.tight_layout()
+plt.show()
+
+print("\nPractical completed successfully!")
+
+
+
+
+# ==========================================================
+# PRACTICAL 5: SENTIMENT ANALYSIS USING RNN, LSTM AND GRU
+# Dataset: IMDB Movie Reviews
+# ==========================================================
+
+import time
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from tensorflow.keras.datasets import imdb
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import (
+    Input, Embedding, SimpleRNN, LSTM, GRU, Dense, Dropout
+)
+
+# Reproducibility
+np.random.seed(42)
+tf.random.set_seed(42)
+
+print("TensorFlow Version:", tf.__version__)
+
+# ==========================================================
+# 1. LOAD IMDB DATASET
+# ==========================================================
+
+VOCAB_SIZE = 10000
+MAX_LEN = 300
+EMBEDDING_DIM = 64
+
+(x_train, y_train), (x_test, y_test) = imdb.load_data(
+    num_words=VOCAB_SIZE
+)
+
+print("\nDataset loaded successfully!")
+print("Training reviews:", len(x_train))
+print("Testing reviews:", len(x_test))
+print("Number of classes: 2 (Negative and Positive)")
+
+# ==========================================================
+# 2. PREPROCESS REVIEWS
+# ==========================================================
+
+# Pad/truncate reviews to a fixed length
+x_train = pad_sequences(
+    x_train, maxlen=MAX_LEN, padding="post", truncating="post"
+)
+
+x_test = pad_sequences(
+    x_test, maxlen=MAX_LEN, padding="post", truncating="post"
+)
+
+print("Padded training shape:", x_train.shape)
+print("Padded testing shape:", x_test.shape)
+
+# ==========================================================
+# 3. BUILD RNN, LSTM AND GRU MODELS
+# ==========================================================
+
+def build_model(model_type):
+
+    model = Sequential([
+        Input(shape=(MAX_LEN,)),
+        Embedding(VOCAB_SIZE, EMBEDDING_DIM)
+    ])
+
+    if model_type == "RNN":
+        model.add(SimpleRNN(32))
+    elif model_type == "LSTM":
+        model.add(LSTM(32))
+    elif model_type == "GRU":
+        model.add(GRU(32))
+
+    model.add(Dropout(0.3))
+    model.add(Dense(1, activation="sigmoid"))
+
+    model.compile(
+        optimizer="adam",
+        loss="binary_crossentropy",
+        metrics=["accuracy"]
+    )
+
+    return model
+
+# ==========================================================
+# 4. TRAIN AND EVALUATE ALL MODELS
+# ==========================================================
+
+model_types = ["RNN", "LSTM", "GRU"]
+
+models = {}
+histories = {}
+results = []
+
+EPOCHS = 5
+BATCH_SIZE = 128
+
+for model_type in model_types:
+
+    print("\n" + "=" * 45)
+    print("Training", model_type, "model")
+    print("=" * 45)
+
+    model = build_model(model_type)
+    model.summary()
+
+    start_time = time.time()
+
+    history = model.fit(
+        x_train,
+        y_train,
+        epochs=EPOCHS,
+        batch_size=BATCH_SIZE,
+        validation_split=0.2,
+        verbose=1
+    )
+
+    training_time = time.time() - start_time
+
+    test_loss, test_accuracy = model.evaluate(
+        x_test, y_test, verbose=0
+    )
+
+    models[model_type] = model
+    histories[model_type] = history
+
+    results.append({
+        "Model": model_type,
+        "Test Accuracy (%)": test_accuracy * 100,
+        "Test Loss": test_loss,
+        "Training Time (seconds)": training_time
+    })
+
+    print(f"\n{model_type} Test Accuracy: {test_accuracy * 100:.2f}%")
+    print(f"Training Time: {training_time:.2f} seconds")
+
+# ==========================================================
+# 5. COMPARE ACCURACY AND TRAINING TIME
+# ==========================================================
+
+results_df = pd.DataFrame(results)
+
+print("\n========== MODEL COMPARISON ==========")
+print(results_df.round(3).to_string(index=False))
+
+# Accuracy comparison
+plt.figure(figsize=(8, 5))
+plt.bar(
+    results_df["Model"],
+    results_df["Test Accuracy (%)"]
+)
+plt.title("RNN vs LSTM vs GRU: Test Accuracy")
+plt.xlabel("Model")
+plt.ylabel("Accuracy (%)")
+plt.ylim(0, 100)
+plt.show()
+
+# Training time comparison
+plt.figure(figsize=(8, 5))
+plt.bar(
+    results_df["Model"],
+    results_df["Training Time (seconds)"]
+)
+plt.title("Training Time Comparison")
+plt.xlabel("Model")
+plt.ylabel("Time (seconds)")
+plt.show()
+
+# ==========================================================
+# 6. PLOT TRAINING AND VALIDATION ACCURACY
+# ==========================================================
+
+plt.figure(figsize=(10, 6))
+
+for model_type, history in histories.items():
+    plt.plot(
+        history.history["val_accuracy"],
+        label=model_type + " Validation"
+    )
+
+plt.title("Validation Accuracy Across Epochs")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# ==========================================================
+# 7. TEST ON SHORT AND LONG REVIEWS
+# ==========================================================
+
+word_index = imdb.get_word_index()
+
+# Reverse word index; IMDB indices are offset by 3
+reverse_word_index = {
+    index + 3: word
+    for word, index in word_index.items()
+}
+
+reverse_word_index[0] = "<PAD>"
+reverse_word_index[1] = "<START>"
+reverse_word_index[2] = "<UNK>"
+reverse_word_index[3] = "<UNUSED>"
+
+
+def encode_review(text):
+    # Simple demonstration tokenizer for English reviews
+    tokens = text.lower().replace(".", " ").replace(",", " ").split()
+
+    sequence = [1]  # Start token
+
+    for token in tokens:
+        # Dataset index = word index + 3
+        index = word_index.get(token, 2) + 3
+        if index >= VOCAB_SIZE:
+            index = 2
+        sequence.append(index)
+
+    return pad_sequences(
+        [sequence],
+        maxlen=MAX_LEN,
+        padding="post",
+        truncating="post"
+    )
+
+
+short_review = "This movie was wonderful and enjoyable"
+long_review = (
+    "The movie had excellent acting and a wonderful story. "
+    "The characters were interesting and the music was great. "
+    "I enjoyed the film and would recommend it to everyone. "
+) * 20
+
+sample_reviews = {
+    "Short review": short_review,
+    "Long review": long_review
+}
+
+print("\n========== REVIEW PREDICTIONS ==========")
+
+for review_name, review_text in sample_reviews.items():
+
+    encoded = encode_review(review_text)
+
+    print("\n", review_name)
+
+    for model_type, model in models.items():
+        probability = float(
+            model.predict(encoded, verbose=0)[0][0]
+        )
+
+        sentiment = "Positive" if probability >= 0.5 else "Negative"
+
+        print(
+            f"{model_type}: {sentiment} "
+            f"(positive probability: {probability:.3f})"
+        )
+
+# ==========================================================
+# 8. SAVE AND RELOAD THE BEST MODEL
+# ==========================================================
+
+best_model_name = results_df.loc[
+    results_df["Test Accuracy (%)"].idxmax(), "Model"
+]
+
+best_model = models[best_model_name]
+
+best_model.save("imdb_best_model.keras")
+
+print(f"\nBest model based on test accuracy: {best_model_name}")
+print("Model saved as imdb_best_model.keras")
+
+loaded_model = tf.keras.models.load_model("imdb_best_model.keras")
+
+loss, accuracy = loaded_model.evaluate(
+    x_test, y_test, verbose=0
+)
+
+print(f"Reloaded model test accuracy: {accuracy * 100:.2f}%")
+
+print("\nPractical completed successfully!")
+
+
+
+
+# ==========================================================
+# PRACTICAL 6: AUTOENCODER IMPLEMENTATION USING MNIST
+# ==========================================================
+
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow.keras import layers, Model
+
+# Reproducibility
+np.random.seed(42)
+tf.random.set_seed(42)
+
+print("TensorFlow Version:", tf.__version__)
+
+# ==========================================================
+# 1. LOAD MNIST DATASET
+# ==========================================================
+
+(x_train, _), (x_test, _) = tf.keras.datasets.mnist.load_data()
+
+print("\nTraining data shape:", x_train.shape)
+print("Testing data shape:", x_test.shape)
+
+# ==========================================================
+# 2. PREPROCESS DATA
+# ==========================================================
+
+# Normalize pixels to the range 0-1
+x_train = x_train.astype("float32") / 255.0
+x_test = x_test.astype("float32") / 255.0
+
+# Flatten 28x28 images into vectors of 784 pixels
+x_train = x_train.reshape(-1, 784)
+x_test = x_test.reshape(-1, 784)
+
+print("Preprocessing completed!")
+print("Flattened training shape:", x_train.shape)
+
+# ==========================================================
+# 3. BUILD THE ENCODER
+# ==========================================================
+
+input_image = layers.Input(shape=(784,), name="input_image")
+
+# Compress 784 input features to 128, then 32
+encoded = layers.Dense(128, activation="relu")(input_image)
+encoded = layers.Dense(32, activation="relu")(encoded)
+
+encoder = Model(input_image, encoded, name="encoder")
+
+# ==========================================================
+# 4. BUILD THE DECODER
+# ==========================================================
+
+latent_input = layers.Input(shape=(32,), name="latent_input")
+
+decoded = layers.Dense(128, activation="relu")(latent_input)
+
+# Reconstruct all 784 pixel values
+decoded = layers.Dense(784, activation="sigmoid")(decoded)
+
+decoder = Model(latent_input, decoded, name="decoder")
+
+# ==========================================================
+# 5. BUILD THE COMPLETE AUTOENCODER
+# ==========================================================
+
+autoencoder_input = layers.Input(shape=(784,))
+
+compressed = encoder(autoencoder_input)
+reconstructed = decoder(compressed)
+
+autoencoder = Model(
+    autoencoder_input,
+    reconstructed,
+    name="autoencoder"
+)
+
+autoencoder.compile(
+    optimizer="adam",
+    loss="mse"
+)
+
+print("\nAUTOENCODER SUMMARY")
+autoencoder.summary()
+
+print("\nENCODER SUMMARY")
+encoder.summary()
+
+print("\nDECODER SUMMARY")
+decoder.summary()
+
+# ==========================================================
+# 6. TRAIN THE AUTOENCODER
+# ==========================================================
+
+history = autoencoder.fit(
+    x_train,
+    x_train,  # Target is the original image itself
+    epochs=20,
+    batch_size=256,
+    shuffle=True,
+    validation_data=(x_test, x_test),
+    verbose=1
+)
+
+# ==========================================================
+# 7. PLOT TRAINING AND VALIDATION LOSS
+# ==========================================================
+
+plt.figure(figsize=(8, 5))
+
+plt.plot(history.history["loss"], label="Training Loss")
+plt.plot(history.history["val_loss"], label="Validation Loss")
+
+plt.title("Autoencoder Training and Validation Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Mean Squared Error")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# ==========================================================
+# 8. RECONSTRUCT TEST IMAGES
+# ==========================================================
+
+reconstructed_images = autoencoder.predict(
+    x_test[:10], verbose=0
+)
+
+# ==========================================================
+# 9. DISPLAY ORIGINAL VS RECONSTRUCTED IMAGES
+# ==========================================================
+
+plt.figure(figsize=(14, 4))
+
+for i in range(10):
+
+    # Original image
+    plt.subplot(2, 10, i + 1)
+    plt.imshow(
+        x_test[i].reshape(28, 28),
+        cmap="gray"
+    )
+    plt.title("Original")
+    plt.axis("off")
+
+    # Reconstructed image
+    plt.subplot(2, 10, i + 11)
+    plt.imshow(
+        reconstructed_images[i].reshape(28, 28),
+        cmap="gray"
+    )
+    plt.title("Reconstructed")
+    plt.axis("off")
+
+plt.suptitle("Original vs Reconstructed MNIST Images")
+plt.tight_layout()
+plt.show()
+
+# ==========================================================
+# 10. CALCULATE RECONSTRUCTION ERROR
+# ==========================================================
+
+test_reconstructed = autoencoder.predict(
+    x_test, batch_size=256, verbose=0
+)
+
+# Mean Squared Error over all pixels and images
+mse = np.mean((x_test - test_reconstructed) ** 2)
+
+# Mean Absolute Error
+mae = np.mean(np.abs(x_test - test_reconstructed))
+
+print("\n========== RECONSTRUCTION RESULTS ==========")
+print(f"Test Reconstruction MSE: {mse:.6f}")
+print(f"Test Reconstruction MAE: {mae:.6f}")
+
+# Per-image reconstruction error
+per_image_mse = np.mean(
+    (x_test - test_reconstructed) ** 2,
+    axis=1
+)
+
+print(f"Average per-image MSE: {per_image_mse.mean():.6f}")
+print(f"Minimum per-image MSE: {per_image_mse.min():.6f}")
+print(f"Maximum per-image MSE: {per_image_mse.max():.6f}")
+
+# ==========================================================
+# 11. VISUALIZE COMPRESSED REPRESENTATIONS
+# ==========================================================
+
+compressed_images = encoder.predict(
+    x_test[:10], verbose=0
+)
+
+print("\nOriginal image dimensions: 784")
+print("Compressed representation dimensions:",
+      compressed_images.shape[1])
+
+# ==========================================================
+# 12. SAVE AND RELOAD THE AUTOENCODER
+# ==========================================================
+
+autoencoder.save("mnist_autoencoder.keras")
+
+print("\nAutoencoder saved successfully!")
+
+loaded_autoencoder = tf.keras.models.load_model(
+    "mnist_autoencoder.keras"
+)
+
+loaded_error = loaded_autoencoder.evaluate(
+    x_test, x_test, verbose=0
+)
+
+print(f"Reloaded model reconstruction MSE: {loaded_error:.6f}")
+
+print("\nPractical completed successfully!")
+
+
+
+
+# ============================================================
+# PRACTICAL 7: CNN OPTIMIZATION STRATEGIES ON CIFAR-10
+# Xavier vs He | SGD vs Adam vs RMSprop | LR schedules
+# ============================================================
+
+import time
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from tensorflow.keras import layers, models
+from tensorflow.keras.datasets import cifar10
+
+# Reproducibility
+np.random.seed(42)
+tf.random.set_seed(42)
+
+print("TensorFlow Version:", tf.__version__)
+
+# ============================================================
+# 1. LOAD AND PREPROCESS CIFAR-10
+# ============================================================
+
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+
+x_train = x_train.astype("float32") / 255.0
+x_test = x_test.astype("float32") / 255.0
+
+y_train = y_train.flatten()
+y_test = y_test.flatten()
+
+# Use a validation set from the training data
+x_val = x_train[-5000:]
+y_val = y_train[-5000:]
+
+x_train = x_train[:-5000]
+y_train = y_train[:-5000]
+
+print("\nTraining samples:", len(x_train))
+print("Validation samples:", len(x_val))
+print("Testing samples:", len(x_test))
+
+class_names = [
+    "airplane", "automobile", "bird", "cat", "deer",
+    "dog", "frog", "horse", "ship", "truck"
+]
+
+# ============================================================
+# 2. DISPLAY SAMPLE IMAGES
+# ============================================================
+
+plt.figure(figsize=(10, 4))
+
+for i in range(10):
+    plt.subplot(2, 5, i + 1)
+    plt.imshow(x_train[i])
+    plt.title(class_names[y_train[i]])
+    plt.axis("off")
+
+plt.tight_layout()
+plt.show()
+
+# ============================================================
+# 3. BUILD CNN
+# ============================================================
+
+def build_cnn(initializer):
+
+    model = models.Sequential([
+        layers.Input(shape=(32, 32, 3)),
+
+        layers.Conv2D(
+            32, (3, 3), padding="same",
+            activation="relu",
+            kernel_initializer=initializer
+        ),
+        layers.MaxPooling2D((2, 2)),
+
+        layers.Conv2D(
+            64, (3, 3), padding="same",
+            activation="relu",
+            kernel_initializer=initializer
+        ),
+        layers.MaxPooling2D((2, 2)),
+
+        layers.Conv2D(
+            128, (3, 3), padding="same",
+            activation="relu",
+            kernel_initializer=initializer
+        ),
+        layers.MaxPooling2D((2, 2)),
+
+        layers.Flatten(),
+
+        layers.Dense(
+            128, activation="relu",
+            kernel_initializer=initializer
+        ),
+
+        layers.Dense(
+            10, activation="softmax",
+            kernel_initializer="glorot_uniform"
+        )
+    ])
+
+    return model
+
+# ============================================================
+# 4. CREATE OPTIMIZERS AND LEARNING-RATE SCHEDULES
+# ============================================================
+
+def get_optimizer(name, schedule_type):
+
+    initial_lr = 0.001 if name != "SGD" else 0.01
+
+    if schedule_type == "Decay":
+        learning_rate = tf.keras.optimizers.schedules.ExponentialDecay(
+            initial_learning_rate=initial_lr,
+            decay_steps=500,
+            decay_rate=0.8,
+            staircase=False
+        )
+    else:
+        learning_rate = initial_lr
+
+    if name == "SGD":
+        return tf.keras.optimizers.SGD(
+            learning_rate=learning_rate,
+            momentum=0.9
+        )
+
+    elif name == "Adam":
+        return tf.keras.optimizers.Adam(
+            learning_rate=learning_rate
+        )
+
+    elif name == "RMSprop":
+        return tf.keras.optimizers.RMSprop(
+            learning_rate=learning_rate
+        )
+
+# ============================================================
+# 5. RUN EXPERIMENTS
+# ============================================================
+
+initializers = ["Xavier", "He"]
+optimizers = ["SGD", "Adam", "RMSprop"]
+schedules = ["Constant", "Decay"]
+
+EPOCHS = 5
+BATCH_SIZE = 128
+
+results = []
+histories = {}
+best_accuracy = 0
+best_model = None
+best_config = None
+
+for init_name in initializers:
+    for opt_name in optimizers:
+        for schedule_name in schedules:
+
+            config_name = (
+                f"{init_name} | {opt_name} | {schedule_name}"
+            )
+
+            print("\n" + "=" * 60)
+            print("Experiment:", config_name)
+            print("=" * 60)
+
+            tf.keras.backend.clear_session()
+            tf.random.set_seed(42)
+
+            # Xavier = Glorot initialization
+            if init_name == "Xavier":
+                initializer = "glorot_uniform"
+            else:
+                initializer = "he_normal"
+
+            model = build_cnn(initializer)
+
+            optimizer = get_optimizer(
+                opt_name, schedule_name
+            )
+
+            model.compile(
+                optimizer=optimizer,
+                loss="sparse_categorical_crossentropy",
+                metrics=["accuracy"]
+            )
+
+            start = time.time()
+
+            history = model.fit(
+                x_train, y_train,
+                validation_data=(x_val, y_val),
+                epochs=EPOCHS,
+                batch_size=BATCH_SIZE,
+                verbose=0
+            )
+
+            training_time = time.time() - start
+
+            test_loss, test_accuracy = model.evaluate(
+                x_test, y_test, verbose=0
+            )
+
+            histories[config_name] = history
+
+            results.append({
+                "Initialization": init_name,
+                "Optimizer": opt_name,
+                "Schedule": schedule_name,
+                "Test Accuracy (%)": test_accuracy * 100,
+                "Test Loss": test_loss,
+                "Training Time (sec)": training_time,
+                "Final Train Accuracy (%)":
+                    history.history["accuracy"][-1] * 100,
+                "Final Val Accuracy (%)":
+                    history.history["val_accuracy"][-1] * 100
+            })
+
+            print(f"Test Accuracy: {test_accuracy * 100:.2f}%")
+            print(f"Test Loss: {test_loss:.4f}")
+            print(f"Training Time: {training_time:.2f} sec")
+
+            if test_accuracy > best_accuracy:
+                best_accuracy = test_accuracy
+                best_model = model
+                best_config = config_name
+
+# ============================================================
+# 6. COMPARE ALL RESULTS
+# ============================================================
+
+results_df = pd.DataFrame(results)
+
+results_df = results_df.sort_values(
+    by="Test Accuracy (%)", ascending=False
+).reset_index(drop=True)
+
+print("\n========== COMPLETE RESULTS ==========")
+print(results_df.round(3).to_string(index=False))
+
+print("\nBest configuration:", best_config)
+print(f"Best test accuracy: {best_accuracy * 100:.2f}%")
+
+# Save results as CSV
+results_df.to_csv("cifar10_optimization_results.csv", index=False)
+print("Results saved to cifar10_optimization_results.csv")
+
+# ============================================================
+# 7. COMPARE OPTIMIZERS
+# ============================================================
+
+optimizer_comparison = results_df.groupby(
+    "Optimizer"
+)[["Test Accuracy (%)", "Training Time (sec)"]].mean()
+
+print("\nAverage performance by optimizer:")
+print(optimizer_comparison.round(3))
+
+optimizer_comparison["Test Accuracy (%)"].plot(
+    kind="bar", figsize=(7, 4)
+)
+plt.title("Average Test Accuracy by Optimizer")
+plt.ylabel("Test Accuracy (%)")
+plt.xticks(rotation=0)
+plt.tight_layout()
+plt.show()
+
+# ============================================================
+# 8. COMPARE INITIALIZATIONS
+# ============================================================
+
+init_comparison = results_df.groupby(
+    "Initialization"
+)[["Test Accuracy (%)", "Test Loss"]].mean()
+
+print("\nAverage performance by initialization:")
+print(init_comparison.round(3))
+
+init_comparison["Test Accuracy (%)"].plot(
+    kind="bar", figsize=(6, 4)
+)
+plt.title("Xavier vs He Initialization")
+plt.ylabel("Average Test Accuracy (%)")
+plt.xticks(rotation=0)
+plt.tight_layout()
+plt.show()
+
+# ============================================================
+# 9. COMPARE LEARNING-RATE SCHEDULES
+# ============================================================
+
+schedule_comparison = results_df.groupby(
+    "Schedule"
+)[["Test Accuracy (%)", "Training Time (sec)"]].mean()
+
+print("\nAverage performance by learning-rate schedule:")
+print(schedule_comparison.round(3))
+
+schedule_comparison["Test Accuracy (%)"].plot(
+    kind="bar", figsize=(6, 4)
+)
+plt.title("Constant vs Decaying Learning Rate")
+plt.ylabel("Average Test Accuracy (%)")
+plt.xticks(rotation=0)
+plt.tight_layout()
+plt.show()
+
+# ============================================================
+# 10. PLOT CONVERGENCE CURVES
+# ============================================================
+
+# Select the best configuration and compare it with
+# the other experiments using validation loss.
+
+plt.figure(figsize=(12, 6))
+
+for name, history in histories.items():
+    plt.plot(
+        history.history["val_loss"],
+        label=name
+    )
+
+plt.title("Convergence Comparison: Validation Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Validation Loss")
+plt.legend(fontsize=7, ncol=2)
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# ============================================================
+# 11. PLOT TRAINING VS VALIDATION ACCURACY
+# ============================================================
+
+best_history = histories[best_config]
+
+plt.figure(figsize=(8, 5))
+plt.plot(
+    best_history.history["accuracy"],
+    label="Training Accuracy"
+)
+plt.plot(
+    best_history.history["val_accuracy"],
+    label="Validation Accuracy"
+)
+
+plt.title("Accuracy Curve: Best Configuration")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# ============================================================
+# 12. SAVE THE BEST MODEL
+# ============================================================
+
+best_model.save("cifar10_best_cnn.keras")
+print("\nBest model saved as cifar10_best_cnn.keras")
+
+# Reload and verify
+loaded_model = tf.keras.models.load_model(
+    "cifar10_best_cnn.keras"
+)
+
+reload_loss, reload_accuracy = loaded_model.evaluate(
+    x_test, y_test, verbose=0
+)
+
+print(f"Reloaded model accuracy: {reload_accuracy * 100:.2f}%")
+print("\nPractical completed successfully!")
+
+
+
+
+# ============================================================
+# PRACTICAL 8: RESNET50 + LSTM IMAGE CAPTIONING
+# Dataset: Flickr8k
+# ============================================================
+
+import os
+import re
+import glob
+import time
+import zipfile
+import urllib.request
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+
+from collections import defaultdict
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.applications.resnet50 import (
+    ResNet50, preprocess_input
+)
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras import layers, Model
+from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
+
+np.random.seed(42)
+tf.random.set_seed(42)
+
+print("TensorFlow version:", tf.__version__)
+
+# ============================================================
+# 1. DOWNLOAD FLICKR8K DATASET AND CAPTIONS
+# ============================================================
+
+image_zip = (
+    "https://github.com/jbrownlee/Datasets/releases/download/"
+    "Flickr8k/Flickr8k_Dataset.zip"
+)
+text_zip = (
+    "https://github.com/jbrownlee/Datasets/releases/download/"
+    "Flickr8k/Flickr8k_text.zip"
+)
+
+image_zip_path = "/content/Flickr8k_Dataset.zip"
+text_zip_path = "/content/Flickr8k_text.zip"
+
+def download_file(url, path):
+    if not os.path.exists(path):
+        print("Downloading:", os.path.basename(path))
+        urllib.request.urlretrieve(url, path)
+
+download_file(image_zip, image_zip_path)
+download_file(text_zip, text_zip_path)
+
+image_extract_dir = "/content/Flickr8k_images"
+text_extract_dir = "/content/Flickr8k_text"
+
+if not os.path.exists(image_extract_dir):
+    os.makedirs(image_extract_dir, exist_ok=True)
+    with zipfile.ZipFile(image_zip_path, "r") as z:
+        z.extractall(image_extract_dir)
+
+if not os.path.exists(text_extract_dir):
+    os.makedirs(text_extract_dir, exist_ok=True)
+    with zipfile.ZipFile(text_zip_path, "r") as z:
+        z.extractall(text_extract_dir)
+
+# Find extracted images and caption file
+image_paths = glob.glob(
+    image_extract_dir + "/**/*.jpg", recursive=True
+)
+
+caption_files = glob.glob(
+    text_extract_dir + "/**/Flickr8k.token.txt",
+    recursive=True
+)
+
+if not image_paths or not caption_files:
+    raise FileNotFoundError(
+        "Could not find Flickr8k images or caption file. "
+        "Check the dataset download and extraction."
+    )
+
+image_path_map = {
+    os.path.basename(path): path for path in image_paths
+}
+
+caption_file = caption_files[0]
+
+print("\nNumber of images found:", len(image_path_map))
+print("Caption file:", caption_file)
+
+# ============================================================
+# 2. LOAD AND CLEAN CAPTIONS
+# ============================================================
+
+captions = defaultdict(list)
+
+with open(caption_file, "r", encoding="utf-8") as file:
+    for line in file:
+        parts = line.strip().split("\t")
+
+        if len(parts) != 2:
+            continue
+
+        image_name = parts[0].split("#")[0]
+        caption = parts[1].lower()
+
+        # Keep letters and spaces
+        caption = re.sub(r"[^a-z ]", "", caption)
+        caption = re.sub(r"\s+", " ", caption).strip()
+
+        if image_name in image_path_map and caption:
+            captions[image_name].append(
+                "startseq " + caption + " endseq"
+            )
+
+valid_images = sorted(
+    name for name in captions
+    if len(captions[name]) > 0
+)
+
+print("Images with captions:", len(valid_images))
+print("Total captions:", sum(len(captions[n]) for n in valid_images))
+
+# Display a sample image and caption
+sample_name = valid_images[0]
+sample_image = tf.keras.utils.load_img(
+    image_path_map[sample_name], target_size=(224, 224)
+)
+
+plt.figure(figsize=(6, 5))
+plt.imshow(sample_image)
+plt.title(captions[sample_name][0])
+plt.axis("off")
+plt.show()
+
+# ============================================================
+# 3. EXTRACT IMAGE FEATURES USING PRETRAINED RESNET50
+# ============================================================
+
+IMG_SIZE = (224, 224)
+BATCH_SIZE = 32
+
+# Remove the original ImageNet classification head
+resnet = ResNet50(
+    weights="imagenet",
+    include_top=False,
+    pooling="avg",
+    input_shape=(224, 224, 3)
+)
+
+resnet.trainable = False
+
+def extract_image_batch(paths):
+    batch_images = []
+
+    for path in paths:
+        image = tf.keras.utils.load_img(
+            path, target_size=IMG_SIZE
+        )
+        image = tf.keras.utils.img_to_array(image)
+        batch_images.append(image)
+
+    batch_images = np.array(batch_images, dtype=np.float32)
+    return preprocess_input(batch_images)
+
+image_features = {}
+
+print("\nExtracting ResNet50 features...")
+
+for start in range(0, len(valid_images), BATCH_SIZE):
+    batch_names = valid_images[start:start + BATCH_SIZE]
+    batch_paths = [image_path_map[name] for name in batch_names]
+
+    batch_images = extract_image_batch(batch_paths)
+
+    features = resnet.predict(batch_images, verbose=0)
+
+    for name, feature in zip(batch_names, features):
+        image_features[name] = feature
+
+    if (start // BATCH_SIZE) % 50 == 0:
+        print(f"Processed {min(start + BATCH_SIZE, len(valid_images))}"
+              f" / {len(valid_images)} images")
+
+FEATURE_SIZE = 2048
+
+print("Feature extraction completed!")
+print("Feature vector shape:", image_features[valid_images[0]].shape)
+
+# ============================================================
+# 4. SPLIT DATA BY IMAGE
+# ============================================================
+
+train_names, test_names = train_test_split(
+    valid_images,
+    test_size=0.2,
+    random_state=42
+)
+
+print("\nTraining images:", len(train_names))
+print("Testing images:", len(test_names))
+
+# ============================================================
+# 5. TOKENIZE CAPTIONS
+# ============================================================
+
+train_captions = [
+    caption
+    for name in train_names
+    for caption in captions[name]
+]
+
+tokenizer = Tokenizer(
+    num_words=5000,
+    oov_token="<unk>",
+    filters=""
+)
+
+tokenizer.fit_on_texts(train_captions)
+
+VOCAB_SIZE = min(5000, len(tokenizer.word_index) + 1)
+
+# Convert all captions to integer sequences
+all_sequences = tokenizer.texts_to_sequences(
+    train_captions
+)
+
+MAX_LENGTH = max(len(seq) for seq in all_sequences)
+
+print("\nVocabulary size:", VOCAB_SIZE)
+print("Maximum caption length:", MAX_LENGTH)
+
+# Use a fixed length for all caption sequences
+MAX_LENGTH = min(MAX_LENGTH, 40)
+
+# ============================================================
+# 6. PREPARE CAPTION TRAINING DATA
+# ============================================================
+
+def prepare_data(image_names):
+
+    img_data = []
+    decoder_inputs = []
+    decoder_targets = []
+    sample_weights = []
+
+    for name in image_names:
+        feature = image_features[name]
+
+        for caption in captions[name]:
+            seq = tokenizer.texts_to_sequences([caption])[0]
+
+            # Ignore captions that have no usable tokens
+            if len(seq) < 2:
+                continue
+
+            # Truncate and ensure the end token is retained
+            seq = seq[:MAX_LENGTH]
+
+            end_id = tokenizer.word_index.get("endseq")
+            if end_id is not None:
+                seq[-1] = end_id
+
+            # Teacher forcing:
+            # input:  startseq, word1, word2, ...
+            # target: word1, word2, ..., endseq
+            decoder_in = seq[:-1]
+            decoder_out = seq[1:]
+
+            decoder_in = pad_sequences(
+                [decoder_in],
+                maxlen=MAX_LENGTH - 1,
+                padding="post",
+                truncating="post"
+            )[0]
+
+            decoder_out = pad_sequences(
+                [decoder_out],
+                maxlen=MAX_LENGTH - 1,
+                padding="post",
+                truncating="post"
+            )[0]
+
+            weights = (decoder_out != 0).astype(np.float32)
+
+            img_data.append(feature)
+            decoder_inputs.append(decoder_in)
+            decoder_targets.append(decoder_out)
+            sample_weights.append(weights)
+
+    return (
+        np.asarray(img_data, dtype=np.float32),
+        np.asarray(decoder_inputs, dtype=np.int32),
+        np.asarray(decoder_targets, dtype=np.int32),
+        np.asarray(sample_weights, dtype=np.float32)
+    )
+
+print("\nPreparing training captions...")
+
+train_img, train_in, train_out, train_weights = prepare_data(
+    train_names
+)
+
+print("Training image features:", train_img.shape)
+print("Decoder inputs:", train_in.shape)
+print("Decoder targets:", train_out.shape)
+
+# ============================================================
+# 7. BUILD CNN + LSTM IMAGE CAPTIONING MODEL
+# ============================================================
+
+EMBEDDING_DIM = 256
+LSTM_UNITS = 256
+
+# Image feature input
+image_input = layers.Input(
+    shape=(FEATURE_SIZE,), name="image_features"
+)
+
+image_dense = layers.Dense(
+    LSTM_UNITS, activation="relu"
+)(image_input)
+
+initial_h = layers.Dense(
+    LSTM_UNITS, activation="tanh"
+)(image_dense)
+
+initial_c = layers.Dense(
+    LSTM_UNITS, activation="tanh"
+)(image_dense)
+
+# Caption token input
+caption_input = layers.Input(
+    shape=(MAX_LENGTH - 1,), name="caption_input"
+)
+
+embedding = layers.Embedding(
+    VOCAB_SIZE,
+    EMBEDDING_DIM,
+    mask_zero=True
+)(caption_input)
+
+lstm_output = layers.LSTM(
+    LSTM_UNITS,
+    return_sequences=True
+)(
+    embedding,
+    initial_state=[initial_h, initial_c]
+)
+
+lstm_output = layers.Dropout(0.3)(lstm_output)
+
+word_output = layers.Dense(
+    VOCAB_SIZE, activation="softmax"
+)(lstm_output)
+
+caption_model = Model(
+    inputs=[image_input, caption_input],
+    outputs=word_output
+)
+
+caption_model.compile(
+    optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+    loss="sparse_categorical_crossentropy"
+)
+
+print("\nImage Captioning Model Summary:")
+caption_model.summary()
+
+# ============================================================
+# 8. TRAIN THE MODEL
+# ============================================================
+
+early_stop = tf.keras.callbacks.EarlyStopping(
+    monitor="val_loss",
+    patience=2,
+    restore_best_weights=True
+)
+
+print("\nTraining CNN + LSTM model...")
+
+start_time = time.time()
+
+history = caption_model.fit(
+    [train_img, train_in],
+    train_out,
+    sample_weight=train_weights,
+    batch_size=64,
+    epochs=10,
+    validation_split=0.1,
+    callbacks=[early_stop],
+    verbose=1
+)
+
+training_time = time.time() - start_time
+
+print(f"\nTraining time: {training_time / 60:.2f} minutes")
+
+# Plot training and validation loss
+plt.figure(figsize=(8, 5))
+plt.plot(history.history["loss"], label="Training Loss")
+plt.plot(history.history["val_loss"], label="Validation Loss")
+plt.title("CNN + LSTM Training Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# ============================================================
+# 9. GENERATE CAPTIONS GREEDILY
+# ============================================================
+
+index_word = {
+    index: word
+    for word, index in tokenizer.word_index.items()
+}
+
+def generate_caption(image_name):
+
+    feature = image_features[image_name]
+
+    start_id = tokenizer.word_index["startseq"]
+    end_id = tokenizer.word_index["endseq"]
+
+    sequence = [start_id]
+
+    for _ in range(MAX_LENGTH - 1):
+
+        padded_sequence = pad_sequences(
+            [sequence],
+            maxlen=MAX_LENGTH - 1,
+            padding="post",
+            truncating="post"
+        )
+
+        predictions = caption_model.predict(
+            [feature.reshape(1, -1), padded_sequence],
+            verbose=0
+        )
+
+        # Predict the next word after the current prefix
+        position = len(sequence) - 1
+        next_id = int(np.argmax(predictions[0, position, :]))
+
+        if next_id == 0 or next_id == end_id:
+            break
+
+        word = index_word.get(next_id, "<unk>")
+
+        if word in ("startseq", "endseq"):
+            break
+
+        sequence.append(next_id)
+
+    words = [
+        index_word.get(token, "<unk>")
+        for token in sequence[1:]
+    ]
+
+    return " ".join(words)
+
+# ============================================================
+# 10. DISPLAY GENERATED CAPTIONS
+# ============================================================
+
+print("\nGenerated Captions:")
+
+for name in test_names[:5]:
+
+    generated = generate_caption(name)
+
+    image = tf.keras.utils.load_img(
+        image_path_map[name], target_size=(224, 224)
+    )
+
+    plt.figure(figsize=(6, 5))
+    plt.imshow(image)
+    plt.title("Generated: " + generated, wrap=True)
+    plt.axis("off")
+    plt.show()
+
+    print("Image:", name)
+    print("Reference caption:", captions[name][0])
+    print("Generated caption:", generated)
+    print("-" * 60)
+
+# ============================================================
+# 11. EVALUATE USING BLEU-1 AND BLEU-4
+# ============================================================
+
+references = []
+hypotheses = []
+
+# Evaluate on a subset to limit Colab runtime
+evaluation_names = test_names[:200]
+
+smooth = SmoothingFunction().method1
+
+for name in evaluation_names:
+
+    reference_tokens = [
+        caption.replace("startseq ", "").replace(" endseq", "").split()
+        for caption in captions[name]
+    ]
+
+    generated = generate_caption(name)
+    generated_tokens = generated.split()
+
+    references.append(reference_tokens)
+    hypotheses.append(generated_tokens)
+
+bleu1 = corpus_bleu(
+    references,
+    hypotheses,
+    weights=(1, 0, 0, 0),
+    smoothing_function=smooth
+)
+
+bleu4 = corpus_bleu(
+    references,
+    hypotheses,
+    weights=(0.25, 0.25, 0.25, 0.25),
+    smoothing_function=smooth
+)
+
+print("\n========== EVALUATION RESULTS ==========")
+print("Images evaluated:", len(evaluation_names))
+print(f"BLEU-1 Score: {bleu1:.4f}")
+print(f"BLEU-4 Score: {bleu4:.4f}")
+
+# ============================================================
+# 12. SAVE AND RELOAD MODEL
+# ============================================================
+
+caption_model.save("/content/flickr8k_caption_model.keras")
+
+print("\nModel saved successfully!")
+
+loaded_model = tf.keras.models.load_model(
+    "/content/flickr8k_caption_model.keras"
+)
+
+print("Model reloaded successfully!")
+
+# Verify the reloaded model can generate a caption
+caption_model = loaded_model
+
+sample_name = test_names[0]
+
+print("\nCaption from reloaded model:")
+print(generate_caption(sample_name))
+
+print("\nPractical completed successfully!")
+
+
+
+
+# PRACTICAL 9: EMBEDDING-BASED PRODUCT RECOMMENDATION
+
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+
+# Upload events.csv from Retailrocket
+from google.colab import files
+uploaded = files.upload()
+
+events = pd.read_csv("events.csv")
+events = events[events["event"].isin(["view", "addtocart", "transaction"])]
+
+# Give more weight to stronger interactions
+events["weight"] = events["event"].map({
+    "view": 1.0,
+    "addtocart": 2.0,
+    "transaction": 3.0
+})
+
+# Use user and item IDs as categorical indices
+events["user_id"] = events["visitorid"].astype(str)
+events["item_id"] = events["itemid"].astype(str)
+
+# Keep manageable data and users with multiple interactions
+events = events.drop_duplicates(["user_id", "item_id"])
+user_counts = events["user_id"].value_counts()
+events = events[events["user_id"].isin(
+    user_counts[user_counts >= 3].index
+)].copy()
+
+user_codes, user_names = pd.factorize(events["user_id"])
+item_codes, item_names = pd.factorize(events["item_id"])
+
+events["u"] = user_codes
+events["i"] = item_codes
+
+n_users = len(user_names)
+n_items = len(item_names)
+
+# Split interactions per user: hold out one interaction per user
+train_rows, test_rows = [], []
+
+for _, group in events.groupby("u"):
+    indices = group.index.to_list()
+    if len(indices) >= 3:
+        test_rows.append(indices[-1])
+        train_rows.extend(indices[:-1])
+    else:
+        train_rows.extend(indices)
+
+train = events.loc[train_rows].copy()
+test = events.loc[test_rows].copy()
+
+# Embedding-based collaborative filtering model
+embedding_dim = 32
+
+user_input = tf.keras.Input(shape=(1,))
+item_input = tf.keras.Input(shape=(1,))
+
+user_vec = tf.keras.layers.Embedding(
+    n_users, embedding_dim
+)(user_input)
+item_vec = tf.keras.layers.Embedding(
+    n_items, embedding_dim
+)(item_input)
+
+user_vec = tf.keras.layers.Flatten()(user_vec)
+item_vec = tf.keras.layers.Flatten()(item_vec)
+
+dot = tf.keras.layers.Dot(axes=1)([user_vec, item_vec])
+output = tf.keras.layers.Activation("sigmoid")(dot)
+
+model = tf.keras.Model([user_input, item_input], output)
+
+model.compile(
+    optimizer="adam",
+    loss="binary_crossentropy"
+)
+
+# Build negative examples by pairing users with unobserved items
+rng = np.random.default_rng(42)
+train_users = train["u"].to_numpy()
+train_items = train["i"].to_numpy()
+
+positive_pairs = set(zip(train_users, train_items))
+negative_items = []
+
+for u in train_users:
+    candidate = rng.integers(0, n_items)
+    attempts = 0
+    while (u, candidate) in positive_pairs and attempts < 50:
+        candidate = rng.integers(0, n_items)
+        attempts += 1
+    negative_items.append(candidate)
+
+X_users = np.concatenate([train_users, train_users])
+X_items = np.concatenate([train_items, np.array(negative_items)])
+y = np.concatenate([
+    np.ones(len(train_users)),
+    np.zeros(len(train_users))
+])
+
+history = model.fit(
+    [X_users, X_items], y,
+    epochs=5,
+    batch_size=1024,
+    validation_split=0.1,
+    verbose=1
+)
+
+# Precision@K and Recall@K using held-out items
+train_seen = train.groupby("u")["i"].apply(set).to_dict()
+test_truth = test.groupby("u")["i"].apply(set).to_dict()
+
+def recommend(user, k=10):
+    candidates = np.array([
+        i for i in range(n_items)
+        if i not in train_seen.get(user, set())
+    ])
+    if len(candidates) == 0:
+        return []
+    users = np.full(len(candidates), user)
+    scores = model.predict([users, candidates], verbose=0).ravel()
+    return candidates[np.argsort(scores)[-k:][::-1]].tolist()
+
+precisions, recalls = [], []
+
+for user, relevant in test_truth.items():
+    recs = recommend(user, k=10)
+    if not recs:
+        continue
+    hits = len(set(recs) & relevant)
+    precisions.append(hits / 10)
+    recalls.append(hits / len(relevant))
+
+print("\nRecommendation Results")
+print("Precision@10:", round(np.mean(precisions), 4))
+print("Recall@10:", round(np.mean(recalls), 4))
+
+plt.plot(history.history["loss"], label="Training loss")
+plt.plot(history.history["val_loss"], label="Validation loss")
+plt.title("Recommendation Model Training")
+plt.xlabel("Epoch")
+plt.ylabel("Binary Cross-Entropy")
+plt.legend()
+plt.show()
+
+# Show recommendations for one user
+example_user = int(test["u"].iloc[0])
+print("\nRecommended product IDs:")
+print([item_names[i] for i in recommend(example_user, 10)])
+
+
+
+
+# PRACTICAL 10: TWEET SENTIMENT + USER INTERACTION GRAPH
+
+import re
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+import networkx as nx
+import matplotlib.pyplot as plt
+
+from google.colab import files
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras import layers
+
+uploaded = files.upload()
+filename = next(iter(uploaded))
+
+# Sentiment140 CSV has no header
+df = pd.read_csv(filename, encoding="latin-1", header=None)
+
+# Expected columns: target, id, date, query, user, text
+df = df.iloc[:, :6]
+df.columns = ["sentiment", "id", "date", "query", "user", "text"]
+
+# Sentiment140: 0 = negative, 4 = positive; ignore neutral if present
+df = df[df["sentiment"].isin([0, 4])].copy()
+df["label"] = (df["sentiment"] == 4).astype(int)
+df["text"] = df["text"].fillna("").astype(str)
+df["user"] = df["user"].fillna("unknown").astype(str)
+
+# Sample for manageable Colab training
+df = df.sample(min(20000, len(df)), random_state=42).reset_index(drop=True)
+
+# Text preprocessing
+def clean_text(text):
+    text = re.sub(r"http\S+|www\S+", " ", text)
+    text = re.sub(r"[^A-Za-z@# ]", " ", text)
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+df["clean_text"] = df["text"].apply(clean_text)
+
+# Tokenize
+MAX_WORDS = 20000
+MAX_LEN = 40
+
+tokenizer = Tokenizer(num_words=MAX_WORDS, oov_token="<UNK>")
+tokenizer.fit_on_texts(df["clean_text"])
+
+sequences = tokenizer.texts_to_sequences(df["clean_text"])
+X = pad_sequences(sequences, maxlen=MAX_LEN, padding="post", truncating="post")
+y = df["label"].to_numpy()
+
+split = int(0.8 * len(df))
+X_train, X_test = X[:split], X[split:]
+y_train, y_test = y[:split], y[split:]
+
+# LSTM sentiment classifier
+model = tf.keras.Sequential([
+    layers.Input(shape=(MAX_LEN,)),
+    layers.Embedding(MAX_WORDS, 64, mask_zero=True),
+    layers.LSTM(64),
+    layers.Dropout(0.3),
+    layers.Dense(1, activation="sigmoid")
+])
+
+model.compile(
+    optimizer="adam",
+    loss="binary_crossentropy",
+    metrics=["accuracy"]
+)
+
+model.fit(
+    X_train, y_train,
+    validation_split=0.1,
+    epochs=3,
+    batch_size=128
+)
+
+loss, accuracy = model.evaluate(X_test, y_test, verbose=0)
+print(f"\nTest accuracy: {accuracy * 100:.2f}%")
+
+# Predict sentiment for tweets
+df["predicted_sentiment"] = (
+    model.predict(X, verbose=0).ravel() >= 0.5
+).astype(int)
+
+# Build user graph from @mentions
+G = nx.DiGraph()
+
+for _, row in df.iterrows():
+    user = row["user"]
+    sentiment = int(row["predicted_sentiment"])
+    G.add_node(user, sentiment=sentiment)
+
+    mentions = set(re.findall(r"@([A-Za-z0-9_]+)", row["text"]))
+    for mentioned_user in mentions:
+        if mentioned_user != user:
+            G.add_edge(user, mentioned_user)
+
+# Keep the largest graph by node degree for readability
+if G.number_of_nodes() > 0:
+    top_nodes = sorted(
+        G.degree, key=lambda x: x[1], reverse=True
+    )[:100]
+    H = G.subgraph([n for n, _ in top_nodes]).copy()
+
+    node_colors = [
+        "tomato" if H.nodes[n].get("sentiment", 0) == 0
+        else "mediumseagreen"
+        for n in H.nodes
+    ]
+
+    plt.figure(figsize=(12, 9))
+    pos = nx.spring_layout(H, seed=42)
+    nx.draw_networkx(
+        H, pos,
+        node_color=node_colors,
+        node_size=250,
+        font_size=7,
+        arrows=True,
+        with_labels=True,
+        edge_color="gray"
+    )
+    plt.title("User Mention Network: Red = Negative, Green = Positive")
+    plt.axis("off")
+    plt.show()
+
+# Overall predicted sentiment distribution
+counts = df["predicted_sentiment"].map({
+    0: "Negative", 1: "Positive"
+}).value_counts()
+
+counts.plot(kind="bar", title="Predicted Tweet Sentiment")
+plt.ylabel("Number of tweets")
+plt.show()
+
+print("Graph nodes:", G.number_of_nodes())
+print("Graph edges:", G.number_of_edges())
+print("Practical completed!")
+
+
+
+
+# PRACTICAL 11: GAN USING MNIST
+
+import numpy as np
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow.keras import layers
+
+tf.random.set_seed(42)
+np.random.seed(42)
+
+# 1. Load and preprocess MNIST
+(x_train, _), (_, _) = tf.keras.datasets.mnist.load_data()
+
+x_train = x_train.astype("float32")
+x_train = (x_train - 127.5) / 127.5
+x_train = np.expand_dims(x_train, axis=-1)
+
+BATCH_SIZE = 128
+NOISE_DIM = 100
+EPOCHS = 20
+
+dataset = (
+    tf.data.Dataset.from_tensor_slices(x_train)
+    .shuffle(10000)
+    .batch(BATCH_SIZE, drop_remainder=True)
+    .prefetch(tf.data.AUTOTUNE)
+)
+
+# 2. Build Generator
+generator = tf.keras.Sequential([
+    layers.Input(shape=(NOISE_DIM,)),
+    layers.Dense(7 * 7 * 128, use_bias=False),
+    layers.BatchNormalization(),
+    layers.LeakyReLU(),
+
+    layers.Reshape((7, 7, 128)),
+
+    layers.Conv2DTranspose(
+        64, 4, strides=2, padding="same", use_bias=False
+    ),
+    layers.BatchNormalization(),
+    layers.LeakyReLU(),
+
+    layers.Conv2DTranspose(
+        32, 4, strides=2, padding="same", use_bias=False
+    ),
+    layers.BatchNormalization(),
+    layers.LeakyReLU(),
+
+    layers.Conv2D(
+        1, 3, padding="same", activation="tanh"
+    )
+])
+
+# 3. Build Discriminator
+discriminator = tf.keras.Sequential([
+    layers.Input(shape=(28, 28, 1)),
+    layers.Conv2D(64, 4, strides=2, padding="same"),
+    layers.LeakyReLU(),
+    layers.Dropout(0.3),
+
+    layers.Conv2D(128, 4, strides=2, padding="same"),
+    layers.LeakyReLU(),
+    layers.Dropout(0.3),
+
+    layers.Flatten(),
+    layers.Dense(1)
+])
+
+# 4. Define losses and optimizers
+cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+
+generator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0002)
+discriminator_optimizer = tf.keras.optimizers.Adam(learning_rate=0.0002)
+
+def generator_loss(fake_output):
+    return cross_entropy(
+        tf.ones_like(fake_output), fake_output
+    )
+
+def discriminator_loss(real_output, fake_output):
+    real_loss = cross_entropy(
+        tf.ones_like(real_output), real_output
+    )
+    fake_loss = cross_entropy(
+        tf.zeros_like(fake_output), fake_output
+    )
+    return real_loss + fake_loss
+
+# 5. One training step
+@tf.function
+def train_step(real_images):
+
+    noise = tf.random.normal([BATCH_SIZE, NOISE_DIM])
+
+    with tf.GradientTape() as gen_tape, \
+         tf.GradientTape() as disc_tape:
+
+        fake_images = generator(noise, training=True)
+
+        real_output = discriminator(real_images, training=True)
+        fake_output = discriminator(fake_images, training=True)
+
+        gen_loss = generator_loss(fake_output)
+        disc_loss = discriminator_loss(real_output, fake_output)
+
+    gen_gradients = gen_tape.gradient(
+        gen_loss, generator.trainable_variables
+    )
+    disc_gradients = disc_tape.gradient(
+        disc_loss, discriminator.trainable_variables
+    )
+
+    generator_optimizer.apply_gradients(
+        zip(gen_gradients, generator.trainable_variables)
+    )
+    discriminator_optimizer.apply_gradients(
+        zip(disc_gradients, discriminator.trainable_variables)
+    )
+
+    return gen_loss, disc_loss
+
+# 6. Generate and display samples
+fixed_noise = tf.random.normal([16, NOISE_DIM])
+gen_losses = []
+disc_losses = []
+
+def show_generated_images(epoch):
+    images = generator(fixed_noise, training=False)
+    images = (images + 1) / 2.0
+
+    plt.figure(figsize=(6, 6))
+    for i in range(16):
+        plt.subplot(4, 4, i + 1)
+        plt.imshow(images[i, :, :, 0], cmap="gray")
+        plt.axis("off")
+
+    plt.suptitle(f"Generated Images - Epoch {epoch}")
+    plt.tight_layout()
+    plt.show()
+
+# 7. Train GAN
+for epoch in range(1, EPOCHS + 1):
+
+    epoch_gen_loss = []
+    epoch_disc_loss = []
+
+    for real_batch in dataset:
+        g_loss, d_loss = train_step(real_batch)
+        epoch_gen_loss.append(float(g_loss))
+        epoch_disc_loss.append(float(d_loss))
+
+    gen_losses.append(np.mean(epoch_gen_loss))
+    disc_losses.append(np.mean(epoch_disc_loss))
+
+    print(
+        f"Epoch {epoch}/{EPOCHS} | "
+        f"Generator Loss: {gen_losses[-1]:.4f} | "
+        f"Discriminator Loss: {disc_losses[-1]:.4f}"
+    )
+
+    if epoch == 1 or epoch % 5 == 0:
+        show_generated_images(epoch)
+
+# 8. Plot losses
+plt.figure(figsize=(9, 5))
+plt.plot(gen_losses, label="Generator Loss")
+plt.plot(disc_losses, label="Discriminator Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.title("GAN Training Losses")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# 9. Save models
+generator.save("mnist_gan_generator.keras")
+discriminator.save("mnist_gan_discriminator.keras")
+
+print("\nGenerator and discriminator saved.")
+print("Practical completed successfully!")
+
+
+
+
+
+# PRACTICAL 12: TRANSFORMER VS LSTM ON AG NEWS
+
+import time
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import tensorflow as tf
+import tensorflow_datasets as tfds
+
+from tensorflow.keras import layers, Model
+
+tf.random.set_seed(42)
+np.random.seed(42)
+
+# 1. Load AG News dataset
+train_ds, test_ds = tfds.load(
+    "ag_news_subset",
+    split=["train", "test"],
+    as_supervised=True
+)
+
+# Keep a manageable subset for Colab
+train_ds = train_ds.take(20000)
+test_ds = test_ds.take(5000)
+
+# Convert dataset to arrays
+def dataset_to_arrays(dataset):
+    texts, labels = [], []
+
+    for text, label in tfds.as_numpy(dataset):
+        texts.append(text.decode("utf-8"))
+        labels.append(int(label))
+
+    return np.array(texts), np.array(labels)
+
+X_train_text, y_train = dataset_to_arrays(train_ds)
+X_test_text, y_test = dataset_to_arrays(test_ds)
+
+print("Training articles:", len(X_train_text))
+print("Testing articles:", len(X_test_text))
+
+class_names = ["World", "Sports", "Business", "Sci/Tech"]
+
+# 2. Text preprocessing
+MAX_TOKENS = 20000
+MAX_LENGTH = 100
+EMBED_DIM = 64
+
+vectorizer = layers.TextVectorization(
+    max_tokens=MAX_TOKENS,
+    output_mode="int",
+    output_sequence_length=MAX_LENGTH
+)
+
+vectorizer.adapt(
+    tf.data.Dataset.from_tensor_slices(X_train_text).batch(256)
+)
+
+vocab_size = len(vectorizer.get_vocabulary())
+print("Vocabulary size:", vocab_size)
+
+# Prepare vectorized inputs
+X_train = vectorizer(X_train_text).numpy()
+X_test = vectorizer(X_test_text).numpy()
+
+# Validation split
+split = int(0.9 * len(X_train))
+
+X_val, y_val = X_train[split:], y_train[split:]
+X_train, y_train = X_train[:split], y_train[:split]
+
+# 3. Build LSTM model
+def build_lstm():
+    inputs = layers.Input(shape=(MAX_LENGTH,))
+
+    x = layers.Embedding(
+        vocab_size, EMBED_DIM, mask_zero=True
+    )(inputs)
+
+    x = layers.LSTM(64)(x)
+    x = layers.Dropout(0.3)(x)
+    outputs = layers.Dense(4, activation="softmax")(x)
+
+    model = Model(inputs, outputs)
+
+    model.compile(
+        optimizer="adam",
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"]
+    )
+
+    return model
+
+# 4. Build Transformer encoder model
+def build_transformer():
+    inputs = layers.Input(shape=(MAX_LENGTH,))
+
+    token_embeddings = layers.Embedding(
+        vocab_size, EMBED_DIM
+    )(inputs)
+
+    positions = tf.range(start=0, limit=MAX_LENGTH, delta=1)
+    position_embeddings = layers.Embedding(
+        MAX_LENGTH, EMBED_DIM
+    )(positions)
+
+    x = token_embeddings + position_embeddings
+
+    # Self-attention
+    attention_mask = tf.not_equal(inputs, 0)[:, tf.newaxis, :]
+
+    attention = layers.MultiHeadAttention(
+        num_heads=4,
+        key_dim=16
+    )(
+        x, x,
+        attention_mask=attention_mask
+    )
+
+    x = layers.LayerNormalization()(x + attention)
+
+    # Feed-forward network
+    ff = layers.Dense(128, activation="relu")(x)
+    ff = layers.Dense(EMBED_DIM)(ff)
+
+    x = layers.LayerNormalization()(x + ff)
+
+    # Pool token features and classify
+    x = layers.GlobalAveragePooling1D()(x)
+    x = layers.Dropout(0.3)(x)
+    outputs = layers.Dense(4, activation="softmax")(x)
+
+    model = Model(inputs, outputs)
+
+    model.compile(
+        optimizer="adam",
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"]
+    )
+
+    return model
+
+# 5. Train and evaluate both models
+results = []
+histories = {}
+models = {}
+
+for model_name, build_fn in [
+    ("LSTM", build_lstm),
+    ("Transformer", build_transformer)
+]:
+    print("\nTraining:", model_name)
+
+    model = build_fn()
+
+    start_time = time.time()
+
+    history = model.fit(
+        X_train, y_train,
+        validation_data=(X_val, y_val),
+        epochs=5,
+        batch_size=128,
+        verbose=1
+    )
+
+    training_time = time.time() - start_time
+
+    test_loss, test_accuracy = model.evaluate(
+        X_test, y_test, verbose=0
+    )
+
+    results.append({
+        "Model": model_name,
+        "Test Accuracy (%)": test_accuracy * 100,
+        "Test Loss": test_loss,
+        "Training Time (seconds)": training_time
+    })
+
+    histories[model_name] = history
+    models[model_name] = model
+
+    print(f"{model_name} Accuracy: {test_accuracy * 100:.2f}%")
+    print(f"Training Time: {training_time:.2f} seconds")
+
+# 6. Compare results
+results_df = pd.DataFrame(results)
+
+print("\n===== MODEL COMPARISON =====")
+print(results_df.round(3).to_string(index=False))
+
+# 7. Plot test accuracy
+plt.figure(figsize=(7, 4))
+plt.bar(
+    results_df["Model"],
+    results_df["Test Accuracy (%)"]
+)
+plt.title("LSTM vs Transformer Accuracy")
+plt.ylabel("Test Accuracy (%)")
+plt.show()
+
+# 8. Plot training time
+plt.figure(figsize=(7, 4))
+plt.bar(
+    results_df["Model"],
+    results_df["Training Time (seconds)"]
+)
+plt.title("Training Time Comparison")
+plt.ylabel("Seconds")
+plt.show()
+
+# 9. Plot validation accuracy
+plt.figure(figsize=(8, 5))
+
+for name, history in histories.items():
+    plt.plot(
+        history.history["val_accuracy"],
+        label=name
+    )
+
+plt.title("Validation Accuracy Across Epochs")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# 10. Predict sample news articles
+best_name = results_df.loc[
+    results_df["Test Accuracy (%)"].idxmax(), "Model"
+]
+
+best_model = models[best_name]
+predictions = best_model.predict(X_test[:10], verbose=0)
+predicted_labels = np.argmax(predictions, axis=1)
+
+print("\n===== SAMPLE PREDICTIONS =====")
+
+for i in range(min(10, len(X_test))):
+    print("\nArticle:", X_test_text[i][:150])
+    print("Actual category:", class_names[y_test[i]])
+    print("Predicted category:", class_names[predicted_labels[i]])
+
+# 11. Save best model
+best_model.save("ag_news_best_model.keras")
+print("\nSaved best model:", best_name)
+print("Practical completed successfully!")
+
+
+
+
+
+# PRACTICAL 13: MLP CLASSIFICATION - FASHION MNIST
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from tensorflow.keras import layers
+
+(x_train, y_train), (x_test, y_test) = tf.keras.datasets.fashion_mnist.load_data()
+x_train, x_test = x_train / 255.0, x_test / 255.0
+
+configs = [
+    ("Sigmoid", [128], "sigmoid"),
+    ("Tanh", [128, 64], "tanh"),
+    ("ReLU", [256, 128, 64], "relu")
+]
+results = []
+
+for name, units, activation in configs:
+    model = tf.keras.Sequential([layers.Input(shape=(28, 28)), layers.Flatten()])
+    for n in units:
+        model.add(layers.Dense(n, activation=activation))
+    model.add(layers.Dense(10, activation="softmax"))
+    model.compile(optimizer="adam", loss="sparse_categorical_crossentropy",
+                  metrics=["accuracy"])
+    model.fit(x_train, y_train, epochs=5, batch_size=128,
+              validation_split=0.1, verbose=1)
+    loss, acc = model.evaluate(x_test, y_test, verbose=0)
+    results.append((name, acc))
+    print(name, "Test accuracy:", round(acc * 100, 2), "%")
+
+plt.bar([r[0] for r in results], [r[1] * 100 for r in results])
+plt.ylabel("Test Accuracy (%)")
+plt.title("MLP Activation Comparison")
+plt.show()
+
+
+
+
+
+# PRACTICAL 14: BINARY CLASSIFICATION
+import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report, confusion_matrix
+
+data = load_breast_cancer()
+X, y = data.data, data.target
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+results = []
+for activation, optimizer in [
+    ("relu", "adam"), ("sigmoid", "adam"),
+    ("tanh", "sgd"), ("relu", "rmsprop")
+]:
+    model = tf.keras.Sequential([
+        tf.keras.layers.Input(shape=(X_train.shape[1],)),
+        tf.keras.layers.Dense(32, activation=activation),
+        tf.keras.layers.Dense(16, activation=activation),
+        tf.keras.layers.Dense(1, activation="sigmoid")
+    ])
+    model.compile(optimizer=optimizer, loss="binary_crossentropy",
+                  metrics=["accuracy"])
+    model.fit(X_train, y_train, epochs=30, batch_size=32,
+              validation_split=0.2, verbose=0)
+    loss, acc = model.evaluate(X_test, y_test, verbose=0)
+    results.append((activation, optimizer, acc))
+    print(activation, optimizer, "Accuracy:", round(acc * 100, 2), "%")
+
+# Evaluate final model
+pred = (model.predict(X_test, verbose=0).ravel() >= 0.5).astype(int)
+print("\nClassification report:\n",
+      classification_report(y_test, pred, target_names=data.target_names))
+print("Confusion matrix:\n", confusion_matrix(y_test, pred))
+
+plt.bar([f"{a}\n{o}" for a, o, _ in results],
+        [acc * 100 for _, _, acc in results])
+plt.ylabel("Test Accuracy (%)")
+plt.title("Activation and Optimizer Comparison")
+plt.show()
+
+
+
+
+
+# PRACTICAL 15: WINE CLASSIFICATION
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from sklearn.datasets import load_wine
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import seaborn as sns
+
+data = load_wine()
+X_train, X_test, y_train, y_test = train_test_split(
+    data.data, data.target, test_size=0.2, random_state=42, stratify=data.target
+)
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(X_train.shape[1],)),
+    tf.keras.layers.Dense(32, activation="relu"),
+    tf.keras.layers.Dense(16, activation="relu"),
+    tf.keras.layers.Dense(3, activation="softmax")
+])
+model.compile(optimizer="adam", loss="sparse_categorical_crossentropy",
+              metrics=["accuracy"])
+model.fit(X_train, y_train, epochs=50, batch_size=16,
+          validation_split=0.2, verbose=0)
+
+pred = model.predict(X_test, verbose=0).argmax(axis=1)
+print("Accuracy:", accuracy_score(y_test, pred))
+print(classification_report(y_test, pred, target_names=data.target_names))
+
+sns.heatmap(confusion_matrix(y_test, pred), annot=True, fmt="d",
+            xticklabels=data.target_names, yticklabels=data.target_names)
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Wine Classification Confusion Matrix")
+plt.show()
+
+
+
+
+# PRACTICAL 16: JENA CLIMATE LSTM
+import os, zipfile, urllib.request
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+
+url = "https://storage.googleapis.com/tensorflow/tf-keras-datasets/jena_climate_2009_2016.csv.zip"
+zip_path = "/content/jena_climate.zip"
+if not os.path.exists(zip_path):
+    urllib.request.urlretrieve(url, zip_path)
+with zipfile.ZipFile(zip_path) as z:
+    z.extractall("/content/jena_data")
+
+csv_path = "/content/jena_data/jena_climate_2009_2016.csv"
+df = pd.read_csv(csv_path)
+
+# Use temperature ("T (degC)") and hourly observations
+values = df["T (degC)"].to_numpy(dtype=np.float32)[::6]
+split = int(len(values) * 0.8)
+
+scaler = StandardScaler()
+train_values = scaler.fit_transform(values[:split, None]).ravel()
+all_values = scaler.transform(values[:, None]).ravel()
+
+WINDOW = 24
+HORIZON = 1
+
+def make_sequences(arr, window):
+    X, y = [], []
+    for i in range(window, len(arr)):
+        X.append(arr[i-window:i])
+        y.append(arr[i])
+    return np.array(X), np.array(y)
+
+X_train, y_train = make_sequences(train_values, WINDOW)
+X_all, y_all = make_sequences(all_values, WINDOW)
+
+# Only sequences whose target falls in the test period
+test_start = max(0, split - WINDOW)
+X_test = X_all[test_start:]
+y_test = y_all[test_start:]
+
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(WINDOW, 1)),
+    tf.keras.layers.LSTM(64),
+    tf.keras.layers.Dense(32, activation="relu"),
+    tf.keras.layers.Dense(1)
+])
+model.compile(optimizer="adam", loss="mse", metrics=["mae"])
+model.fit(X_train[..., None], y_train, epochs=10, batch_size=64,
+          validation_split=0.1, verbose=1)
+
+pred = model.predict(X_test[..., None], verbose=0).ravel()
+actual = scaler.inverse_transform(y_test[:, None]).ravel()
+pred = scaler.inverse_transform(pred[:, None]).ravel()
+
+print("MAE:", mean_absolute_error(actual, pred))
+print("RMSE:", np.sqrt(mean_squared_error(actual, pred)))
+
+plt.figure(figsize=(12, 5))
+plt.plot(actual[:300], label="Actual")
+plt.plot(pred[:300], label="Predicted")
+plt.legend()
+plt.title("Jena Climate Temperature Forecast")
+plt.ylabel("Temperature (°C)")
+plt.show()
+
+
+
+
+
+# PRACTICAL 17: DENOISING AUTOENCODER
+import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
+
+(x_train, _), (x_test, _) = tf.keras.datasets.mnist.load_data()
+x_train = x_train.astype("float32")[..., None] / 255.0
+x_test = x_test.astype("float32")[..., None] / 255.0
+
+rng = np.random.default_rng(42)
+x_train_noisy = np.clip(x_train + rng.normal(0, 0.3, x_train.shape), 0, 1)
+x_test_noisy = np.clip(x_test + rng.normal(0, 0.3, x_test.shape), 0, 1)
+
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(28, 28, 1)),
+    tf.keras.layers.Conv2D(32, 3, activation="relu", padding="same"),
+    tf.keras.layers.MaxPooling2D(2, padding="same"),
+    tf.keras.layers.Conv2D(16, 3, activation="relu", padding="same"),
+    tf.keras.layers.MaxPooling2D(2, padding="same"),
+    tf.keras.layers.Conv2DTranspose(16, 3, strides=2, activation="relu",
+                                    padding="same"),
+    tf.keras.layers.Conv2DTranspose(32, 3, strides=2, activation="relu",
+                                    padding="same"),
+    tf.keras.layers.Conv2D(1, 3, activation="sigmoid", padding="same")
+])
+model.compile(optimizer="adam", loss="mse")
+model.fit(x_train_noisy, x_train, epochs=5, batch_size=128,
+          validation_split=0.1, verbose=1)
+
+denoised = model.predict(x_test_noisy, verbose=0)
+mse = np.mean((x_test - denoised) ** 2)
+psnr = -10 * np.log10(max(mse, 1e-12))
+print("Reconstruction MSE:", mse)
+print("PSNR (dB):", psnr)
+
+plt.figure(figsize=(12, 4))
+for i in range(8):
+    for row, images, title in [
+        (0, x_test_noisy, "Noisy"),
+        (1, denoised, "Denoised"),
+        (2, x_test, "Original")
+    ]:
+        plt.subplot(3, 8, row * 8 + i + 1)
+        plt.imshow(images[i].squeeze(), cmap="gray")
+        plt.axis("off")
+        if i == 0:
+            plt.ylabel(title)
+plt.tight_layout()
+plt.show()
+
+
+
+
+# PRACTICAL 18: CNN WITH AND WITHOUT DATA AUGMENTATION
+import tensorflow as tf
+import matplotlib.pyplot as plt
+import time
+
+URL = "https://storage.googleapis.com/mledu-datasets/cats_and_dogs_filtered.zip"
+zip_path = tf.keras.utils.get_file(
+    "cats_dogs.zip", origin=URL, extract=True
+)
+import os
+base = os.path.join(os.path.dirname(zip_path), "cats_and_dogs_filtered")
+train_dir = os.path.join(base, "train")
+val_dir = os.path.join(base, "validation")
+
+IMG = (150, 150)
+BATCH = 32
+
+train_ds = tf.keras.utils.image_dataset_from_directory(
+    train_dir, image_size=IMG, batch_size=BATCH, label_mode="binary"
+)
+val_ds = tf.keras.utils.image_dataset_from_directory(
+    val_dir, image_size=IMG, batch_size=BATCH, label_mode="binary",
+    shuffle=False
+)
+
+def build_model(augment=False):
+    aug = tf.keras.Sequential([
+        tf.keras.layers.RandomFlip("horizontal"),
+        tf.keras.layers.RandomRotation(0.1),
+        tf.keras.layers.RandomZoom(0.1)
+    ]) if augment else tf.keras.layers.Activation("linear")
+
+    model = tf.keras.Sequential([
+        tf.keras.layers.Input(shape=(150, 150, 3)),
+        aug,
+        tf.keras.layers.Rescaling(1./255),
+        tf.keras.layers.Conv2D(32, 3, activation="relu"),
+        tf.keras.layers.MaxPooling2D(),
+        tf.keras.layers.Conv2D(64, 3, activation="relu"),
+        tf.keras.layers.MaxPooling2D(),
+        tf.keras.layers.Conv2D(128, 3, activation="relu"),
+        tf.keras.layers.GlobalAveragePooling2D(),
+        tf.keras.layers.Dropout(0.3),
+        tf.keras.layers.Dense(1, activation="sigmoid")
+    ])
+    model.compile(optimizer="adam", loss="binary_crossentropy",
+                  metrics=["accuracy"])
+    return model
+
+results = []
+histories = {}
+
+for augment in [False, True]:
+    name = "With augmentation" if augment else "Without augmentation"
+    model = build_model(augment)
+    start = time.time()
+    history = model.fit(train_ds, validation_data=val_ds,
+                        epochs=5, verbose=1)
+    elapsed = time.time() - start
+    loss, acc = model.evaluate(val_ds, verbose=0)
+    results.append((name, acc, elapsed))
+    histories[name] = history
+    print(name, "Accuracy:", round(acc * 100, 2), "%",
+          "Time:", round(elapsed, 1), "sec")
+
+plt.figure(figsize=(8, 4))
+for name, history in histories.items():
+    plt.plot(history.history["val_accuracy"], label=name)
+plt.xlabel("Epoch")
+plt.ylabel("Validation accuracy")
+plt.title("Effect of Data Augmentation")
+plt.legend()
+plt.show()
+
+plt.bar([r[0] for r in results], [r[1] * 100 for r in results])
+plt.ylabel("Validation accuracy (%)")
+plt.xticks(rotation=10)
+plt.show()
+
+
+
+
+
+# PRACTICAL 19: PRETRAINED OBJECT DETECTION
+import torch
+import torchvision
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from torchvision.transforms.functional import to_tensor
+from PIL import Image
+import numpy as np
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+weights = torchvision.models.detection.FasterRCNN_ResNet50_FPN_Weights.DEFAULT
+model = torchvision.models.detection.fasterrcnn_resnet50_fpn(
+    weights=weights
+).to(device).eval()
+categories = weights.meta["categories"]
+
+# Upload a Pascal VOC image or any image
+from google.colab import files
+uploaded = files.upload()
+image_path = next(iter(uploaded))
+
+image = Image.open(image_path).convert("RGB")
+tensor = to_tensor(image).to(device)
+
+with torch.no_grad():
+    result = model([tensor])[0]
+
+boxes = result["boxes"].cpu().numpy()
+labels = result["labels"].cpu().numpy()
+scores = result["scores"].cpu().numpy()
+
+threshold = 0.6
+keep = scores >= threshold
+
+fig, ax = plt.subplots(figsize=(12, 8))
+ax.imshow(image)
+
+for box, label, score in zip(boxes[keep], labels[keep], scores[keep]):
+    x1, y1, x2, y2 = box
+    ax.add_patch(patches.Rectangle(
+        (x1, y1), x2-x1, y2-y1,
+        fill=False, edgecolor="red", linewidth=2
+    ))
+    ax.text(x1, y1, f"{categories[label]} {score:.2f}",
+            color="white", backgroundcolor="red")
+ax.axis("off")
+plt.title("Faster R-CNN Object Detection")
+plt.show()
+
+# IoU function for two bounding boxes in xyxy format
+def iou(box_a, box_b):
+    x1 = max(box_a[0], box_b[0])
+    y1 = max(box_a[1], box_b[1])
+    x2 = min(box_a[2], box_b[2])
+    y2 = min(box_a[3], box_b[3])
+    intersection = max(0, x2-x1) * max(0, y2-y1)
+    area_a = max(0, box_a[2]-box_a[0]) * max(0, box_a[3]-box_a[1])
+    area_b = max(0, box_b[2]-box_b[0]) * max(0, box_b[3]-box_b[1])
+    return intersection / max(area_a + area_b - intersection, 1e-9)
+
+# Demonstrate IoU if at least two detections exist
+selected = np.where(keep)[0]
+if len(selected) >= 2:
+    print("IoU between first two detections:",
+          round(iou(boxes[selected[0]], boxes[selected[1]]), 4))
+else:
+    print("Not enough detections for a sample IoU calculation.")
+
+print("Detections above threshold:", int(keep.sum()))
+
+
+
+
+
+# PRACTICAL 20: CHARACTER-LEVEL LSTM TEXT GENERATION
+import tensorflow as tf
+import numpy as np
+import urllib.request
+import matplotlib.pyplot as plt
+
+url = "https://storage.googleapis.com/download.tensorflow.org/data/shakespeare.txt"
+path = tf.keras.utils.get_file("shakespeare.txt", url)
+text = open(path, encoding="utf-8").read()[:300000]
+
+vocab = sorted(set(text))
+char_to_id = {c: i for i, c in enumerate(vocab)}
+id_to_char = np.array(vocab)
+encoded = np.array([char_to_id[c] for c in text], dtype=np.int32)
+
+SEQ_LEN = 100
+BATCH = 64
+
+ds = tf.data.Dataset.from_tensor_slices(encoded)
+ds = ds.window(SEQ_LEN + 1, shift=1, drop_remainder=True)
+ds = ds.flat_map(lambda w: w.batch(SEQ_LEN + 1))
+ds = ds.map(lambda w: (w[:-1], w[1:]))
+ds = ds.shuffle(10000).batch(BATCH).prefetch(tf.data.AUTOTUNE)
+
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(SEQ_LEN,)),
+    tf.keras.layers.Embedding(len(vocab), 128),
+    tf.keras.layers.LSTM(256, return_sequences=True),
+    tf.keras.layers.Dense(len(vocab))
+])
+
+model.compile(optimizer="adam",
+              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True))
+model.fit(ds, epochs=5)
+
+def generate(seed, length=500, temperature=0.8):
+    ids = [char_to_id.get(c, 0) for c in seed]
+    output = list(seed)
+
+    for _ in range(length):
+        context = ids[-SEQ_LEN:]
+        context = [0] * max(0, SEQ_LEN-len(context)) + context
+        logits = model(np.array([context]), training=False)[0, -1]
+        logits = logits / temperature
+        next_id = int(tf.random.categorical(logits[None, :], 1)[0, 0])
+        ids.append(next_id)
+        output.append(id_to_char[next_id])
+
+    return "".join(output)
+
+for temp in [0.4, 0.8, 1.2]:
+    print(f"\n--- Temperature {temp} ---")
+    print(generate("ROMEO: ", 300, temp))
+
+
+
+
+
+# PRACTICAL 21: BiLSTM NAMED ENTITY RECOGNITION
+!pip -q install datasets
+
+import numpy as np
+import tensorflow as tf
+from datasets import load_dataset
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from sklearn.metrics import classification_report
+
+ds = load_dataset("eriktks/conll2003")
+train_data = ds["train"].select(range(min(5000, len(ds["train"])))
+)
+test_data = ds["test"].select(range(min(1000, len(ds["test"])))
+
+# Build vocabulary and tag mappings
+word_to_id = {"<PAD>": 0, "<UNK>": 1}
+tag_names = ds["train"].features["ner_tags"].feature.names
+tag_to_id = {tag: i for i, tag in enumerate(tag_names)}
+
+for row in train_data:
+    for word in row["tokens"]:
+        word = word.lower()
+        if word not in word_to_id:
+            word_to_id[word] = len(word_to_id)
+
+MAX_LEN = 50
+VOCAB = len(word_to_id)
+N_TAGS = len(tag_names)
+
+def encode(rows):
+    X, y = [], []
+    for row in rows:
+        words = [word_to_id.get(w.lower(), 1) for w in row["tokens"][:MAX_LEN]]
+        tags = row["ner_tags"][:MAX_LEN]
+        X.append(words)
+        y.append(tags)
+    return (
+        pad_sequences(X, maxlen=MAX_LEN, padding="post"),
+        pad_sequences(y, maxlen=MAX_LEN, padding="post", value=0)
+    )
+
+X_train, y_train = encode(train_data)
+X_test, y_test = encode(test_data)
+
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(MAX_LEN,)),
+    tf.keras.layers.Embedding(VOCAB, 64, mask_zero=True),
+    tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64, return_sequences=True)),
+    tf.keras.layers.Dense(N_TAGS, activation="softmax")
+])
+model.compile(optimizer="adam", loss="sparse_categorical_crossentropy",
+              metrics=["accuracy"])
+model.fit(X_train, y_train, epochs=5, batch_size=64, validation_split=0.1)
+
+pred = model.predict(X_test, verbose=0).argmax(axis=-1)
+mask = X_test != 0
+
+print(classification_report(
+    y_test[mask].ravel(), pred[mask].ravel(),
+    labels=list(range(N_TAGS)), target_names=tag_names,
+    zero_division=0
+))
+
+
+
+
+
+
+# PRACTICAL 22: ENGLISH TO FRENCH TRANSLATION WITH ATTENTION
+import os
+import urllib.request
+import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from tensorflow.keras import layers
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+
+url = "https://www.manythings.org/anki/fra-eng.zip"
+zip_path = tf.keras.utils.get_file("fra-eng.zip", url, extract=True)
+folder = os.path.dirname(zip_path)
+txt_path = os.path.join(folder, "fra.txt")
+
+pairs = []
+with open(txt_path, encoding="utf-8") as f:
+    for line in f:
+        parts = line.strip().split("\t")
+        if len(parts) >= 2:
+            pairs.append((parts[0].lower(), "startseq " + parts[1].lower() + " endseq"))
+
+pairs = pairs[:20000]
+src_texts = [p[0] for p in pairs]
+tgt_texts = [p[1] for p in pairs]
+
+src_tok = Tokenizer(num_words=10000, oov_token="<unk>")
+tgt_tok = Tokenizer(num_words=10000, oov_token="<unk>", filters="")
+src_tok.fit_on_texts(src_texts)
+tgt_tok.fit_on_texts(tgt_texts)
+
+src_seq = src_tok.texts_to_sequences(src_texts)
+tgt_seq = tgt_tok.texts_to_sequences(tgt_texts)
+SRC_LEN = min(20, max(map(len, src_seq)))
+TGT_LEN = min(20, max(map(len, tgt_seq)))
+
+X = pad_sequences(src_seq, maxlen=SRC_LEN, padding="post", truncating="post")
+Y = pad_sequences(tgt_seq, maxlen=TGT_LEN, padding="post", truncating="post")
+
+# Decoder inputs are shifted right; labels are shifted left
+decoder_in = Y[:, :-1]
+decoder_out = Y[:, 1:]
+
+split = int(0.9 * len(X))
+Xtr, Xte = X[:split], X[split:]
+Din_tr, Din_te = decoder_in[:split], decoder_in[split:]
+Dout_tr, Dout_te = decoder_out[:split], decoder_out[split:]
+
+src_vocab = min(10000, len(src_tok.word_index) + 1)
+tgt_vocab = min(10000, len(tgt_tok.word_index) + 1)
+dim = 128
+
+# Encoder
+enc_in = layers.Input(shape=(SRC_LEN,))
+enc_emb_layer = layers.Embedding(src_vocab, dim, mask_zero=True)
+enc_emb = enc_emb_layer(enc_in)
+enc_out, h, c = layers.LSTM(dim, return_sequences=True,
+                            return_state=True)(enc_emb)
+
+# Decoder with attention
+dec_in = layers.Input(shape=(TGT_LEN - 1,))
+dec_emb_layer = layers.Embedding(tgt_vocab, dim, mask_zero=True)
+dec_emb = dec_emb_layer(dec_in)
+dec_out = layers.LSTM(dim, return_sequences=True)(dec_emb, initial_state=[h, c])
+
+attention = layers.AdditiveAttention()
+context = attention([dec_out, enc_out])
+combined = layers.Concatenate()([dec_out, context])
+outputs = layers.Dense(tgt_vocab, activation="softmax")(combined)
+
+model = tf.keras.Model([enc_in, dec_in], outputs)
+model.compile(optimizer="adam", loss="sparse_categorical_crossentropy",
+              metrics=["accuracy"])
+
+model.fit(
+    [Xtr, Din_tr], Dout_tr,
+    validation_split=0.1, epochs=5, batch_size=128, verbose=1
+)
+
+# Greedy decoding
+reverse_tgt = {v: k for k, v in tgt_tok.word_index.items()}
+start_id = tgt_tok.word_index["startseq"]
+end_id = tgt_tok.word_index["endseq"]
+
+def translate(sentence):
+    source = src_tok.texts_to_sequences([sentence.lower()])
+    source = pad_sequences(source, maxlen=SRC_LEN, padding="post", truncating="post")
+    target = [start_id]
+
+    for _ in range(TGT_LEN - 1):
+        dec = pad_sequences([target], maxlen=TGT_LEN - 1, padding="post")
+        probs = model.predict([source, dec], verbose=0)
+        next_id = int(np.argmax(probs[0, len(target)-1]))
+        if next_id == end_id or next_id == 0:
+            break
+        target.append(next_id)
+
+    return " ".join(
+        reverse_tgt.get(i, "") for i in target[1:]
+    )
+
+sample = "how are you"
+print("English:", sample)
+print("French prediction:", translate(sample))
+
+# BLEU on a small held-out sample
+smooth = SmoothingFunction().method1
+scores = []
+
+for i in range(min(100, len(Xte))):
+    source_words = [reverse_tgt.get(int(t), "") for t in []]  # not used
+    original_idx = split + i
+    src = src_texts[original_idx]
+    reference = tgt_texts[original_idx].replace("startseq ", "").replace(" endseq", "").split()
+    prediction = translate(src).split()
+    scores.append(sentence_bleu([reference], prediction, smoothing_function=smooth))
+
+print("Mean BLEU score (sample):", round(float(np.mean(scores)), 4))
+
+
+
+
+
+
+
+# PRACTICAL 23: VARIATIONAL AUTOENCODER
+import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from tensorflow.keras import layers, Model
+
+(x_train, _), (x_test, _) = tf.keras.datasets.mnist.load_data()
+x_train = x_train.astype("float32").reshape(-1, 784) / 255.0
+x_test = x_test.astype("float32").reshape(-1, 784) / 255.0
+
+LATENT = 2
+
+# Encoder
+inputs = layers.Input(shape=(784,))
+x = layers.Dense(256, activation="relu")(inputs)
+x = layers.Dense(128, activation="relu")(x)
+z_mean = layers.Dense(LATENT)(x)
+z_log_var = layers.Dense(LATENT)(x)
+
+def sampling(args):
+    mean, log_var = args
+    eps = tf.random.normal(shape=tf.shape(mean))
+    return mean + tf.exp(0.5 * log_var) * eps
+
+z = layers.Lambda(sampling)([z_mean, z_log_var])
+encoder = Model(inputs, [z_mean, z_log_var, z])
+
+# Decoder
+latent_inputs = layers.Input(shape=(LATENT,))
+x = layers.Dense(128, activation="relu")(latent_inputs)
+x = layers.Dense(256, activation="relu")(x)
+outputs = layers.Dense(784, activation="sigmoid")(x)
+decoder = Model(latent_inputs, outputs)
+
+class VAE(Model):
+    def __init__(self, encoder, decoder):
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.loss_tracker = tf.keras.metrics.Mean(name="loss")
+
+    @property
+    def metrics(self):
+        return [self.loss_tracker]
+
+    def train_step(self, data):
+        if isinstance(data, tuple):
+            data = data[0]
+        with tf.GradientTape() as tape:
+            mean, log_var, z = self.encoder(data, training=True)
+            reconstruction = self.decoder(z, training=True)
+            recon_loss = tf.reduce_mean(
+                tf.reduce_sum(
+                    tf.keras.losses.binary_crossentropy(data, reconstruction),
+                    axis=-1
+                )
+            )
+            kl_loss = -0.5 * tf.reduce_mean(
+                tf.reduce_sum(
+                    1 + log_var - tf.square(mean) - tf.exp(log_var),
+                    axis=-1
+                )
+            )
+            loss = recon_loss + kl_loss
+        grads = tape.gradient(loss, self.trainable_variables)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_variables))
+        self.loss_tracker.update_state(loss)
+        return {"loss": self.loss_tracker.result()}
+
+vae = VAE(encoder, decoder)
+vae.compile(optimizer="adam")
+vae.fit(x_train, epochs=10, batch_size=128, verbose=1)
+
+# Plot latent space
+means, _, _ = encoder.predict(x_test, verbose=0)
+plt.figure(figsize=(7, 6))
+plt.scatter(means[:, 0], means[:, 1], s=3, alpha=0.5)
+plt.title("MNIST VAE Latent Space")
+plt.xlabel("Latent Dimension 1")
+plt.ylabel("Latent Dimension 2")
+plt.show()
+
+# Generate new images from random latent points
+samples = np.random.normal(size=(16, LATENT)).astype("float32")
+generated = decoder.predict(samples, verbose=0)
+
+plt.figure(figsize=(6, 6))
+for i in range(16):
+    plt.subplot(4, 4, i + 1)
+    plt.imshow(generated[i].reshape(28, 28), cmap="gray")
+    plt.axis("off")
+plt.suptitle("Images Generated by VAE")
+plt.tight_layout()
+plt.show()
+
+
+
+
+
+
+
+
+
+
+# PRACTICAL 24: FRAUD DETECTION USING AUTOENCODER
+import numpy as np
+import pandas as pd
+import tensorflow as tf
+import matplotlib.pyplot as plt
+
+from google.colab import files
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
+
+uploaded = files.upload()
+df = pd.read_csv("creditcard.csv")
+
+# Class 0 = normal; Class 1 = fraud
+X = df.drop(columns=["Class"]).to_numpy(dtype=np.float32)
+y = df["Class"].to_numpy()
+
+# Split first to prevent leakage
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Train only on normal training transactions
+X_normal = X_train[y_train == 0]
+
+n_features = X_train.shape[1]
+model = tf.keras.Sequential([
+    tf.keras.layers.Input(shape=(n_features,)),
+    tf.keras.layers.Dense(32, activation="relu"),
+    tf.keras.layers.Dense(16, activation="relu"),
+    tf.keras.layers.Dense(8, activation="relu"),
+    tf.keras.layers.Dense(16, activation="relu"),
+    tf.keras.layers.Dense(32, activation="relu"),
+    tf.keras.layers.Dense(n_features)
+])
+
+model.compile(optimizer="adam", loss="mse")
+model.fit(
+    X_normal, X_normal,
+    epochs=20, batch_size=256,
+    validation_split=0.1, verbose=1
+)
+
+# Reconstruction errors for normal training samples
+train_reconstruction = model.predict(X_normal, verbose=0)
+train_errors = np.mean((X_normal - train_reconstruction) ** 2, axis=1)
+
+# Threshold = 99th percentile of normal training errors
+threshold = np.percentile(train_errors, 99)
+print("Anomaly threshold:", threshold)
+
+# Evaluate on held-out data
+test_reconstruction = model.predict(X_test, verbose=0)
+test_errors = np.mean((X_test - test_reconstruction) ** 2, axis=1)
+y_pred = (test_errors > threshold).astype(int)
+
+print("Precision:", precision_score(y_test, y_pred, zero_division=0))
+print("Recall:", recall_score(y_test, y_pred, zero_division=0))
+print("F1-score:", f1_score(y_test, y_pred, zero_division=0))
+print("Confusion matrix:\n", confusion_matrix(y_test, y_pred))
+
+plt.figure(figsize=(8, 4))
+plt.hist(train_errors, bins=50, alpha=0.7, label="Normal training errors")
+plt.axvline(threshold, linestyle="--", label="Anomaly threshold")
+plt.xlabel("Reconstruction MSE")
+plt.ylabel("Count")
+plt.title("Fraud Detection Threshold")
+plt.legend()
+plt.show()
+
+plt.figure(figsize=(8, 4))
+plt.hist(test_errors[y_test == 0], bins=50, alpha=0.6, label="Normal")
+plt.hist(test_errors[y_test == 1], bins=50, alpha=0.6, label="Fraud")
+plt.axvline(threshold, linestyle="--", label="Threshold")
+plt.xlabel("Reconstruction MSE")
+plt.ylabel("Count")
+plt.legend()
+plt.title("Normal vs Fraud Reconstruction Errors")
+plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+# PRACTICAL 25: OXFORD-IIIT PET IMAGE SEGMENTATION
+!pip -q install tensorflow-datasets
+
+import tensorflow as tf
+import tensorflow_datasets as tfds
+import numpy as np
+import matplotlib.pyplot as plt
+
+IMG_SIZE = 128
+BATCH = 16
+
+# Oxford-IIIT Pet includes images and trimaps
+ds_train, ds_test = tfds.load(
+    "oxford_iiit_pet",
+    split=["train[:80%]", "train[80%:]"],
+    as_supervised=False
+)
+
+def preprocess(example):
+    image = tf.image.resize(
+        example["image"], (IMG_SIZE, IMG_SIZE)
+    )
+    image = tf.cast(image, tf.float32) / 255.0
+
+    mask = tf.image.resize(
+        example["segmentation_mask"],
+        (IMG_SIZE, IMG_SIZE),
+        method="nearest"
+    )
+
+    # Trimap labels: 1=foreground, 2=background, 3=boundary
+    # Convert to binary foreground mask
+    mask = tf.cast(mask, tf.int32)
+    mask = tf.cast(tf.equal(mask, 1), tf.float32)
+
+    return image, mask
+
+train_ds = (
+    ds_train.map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+    .take(2500).batch(BATCH).prefetch(tf.data.AUTOTUNE)
+)
+test_ds = (
+    ds_test.map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+    .take(500).batch(BATCH).prefetch(tf.data.AUTOTUNE)
+)
+
+# U-Net-style model
+def conv_block(x, filters):
+    x = tf.keras.layers.Conv2D(
+        filters, 3, padding="same", activation="relu"
+    )(x)
+    x = tf.keras.layers.Conv2D(
+        filters, 3, padding="same", activation="relu"
+    )(x)
+    return x
+
+inputs = tf.keras.layers.Input((IMG_SIZE, IMG_SIZE, 3))
+
+c1 = conv_block(inputs, 32)
+p1 = tf.keras.layers.MaxPooling2D()(c1)
+
+c2 = conv_block(p1, 64)
+p2 = tf.keras.layers.MaxPooling2D()(c2)
+
+c3 = conv_block(p2, 128)
+p3 = tf.keras.layers.MaxPooling2D()(c3)
+
+b = conv_block(p3, 256)
+
+u3 = tf.keras.layers.UpSampling2D()(b)
+u3 = tf.keras.layers.Concatenate()([u3, c3])
+c4 = conv_block(u3, 128)
+
+u2 = tf.keras.layers.UpSampling2D()(c4)
+u2 = tf.keras.layers.Concatenate()([u2, c2])
+c5 = conv_block(u2, 64)
+
+u1 = tf.keras.layers.UpSampling2D()(c5)
+u1 = tf.keras.layers.Concatenate()([u1, c1])
+c6 = conv_block(u1, 32)
+
+outputs = tf.keras.layers.Conv2D(
+    1, 1, activation="sigmoid"
+)(c6)
+
+model = tf.keras.Model(inputs, outputs)
+
+model.compile(
+    optimizer="adam",
+    loss="binary_crossentropy",
+    metrics=["accuracy"]
+)
+
+model.summary()
+model.fit(train_ds, epochs=5, validation_data=test_ds, verbose=1)
+
+# Calculate binary foreground IoU
+intersection_total = 0
+union_total = 0
+
+for images, masks in test_ds:
+    probabilities = model.predict(images, verbose=0)
+    pred_masks = probabilities >= 0.5
+    true_masks = masks >= 0.5
+
+    intersection_total += np.logical_and(
+        pred_masks, true_masks
+    ).sum()
+
+    union_total += np.logical_or(
+        pred_masks, true_masks
+    ).sum()
+
+iou = intersection_total / max(union_total, 1)
+print(f"\nForeground Intersection over Union (IoU): {iou:.4f}")
+
+# Show original images, true masks and predicted masks
+images, masks = next(iter(test_ds))
+predictions = model.predict(images[:4], verbose=0)
+
+plt.figure(figsize=(10, 9))
+for i in range(4):
+    plt.subplot(4, 3, i * 3 + 1)
+    plt.imshow(images[i])
+    plt.title("Original")
+    plt.axis("off")
+
+    plt.subplot(4, 3, i * 3 + 2)
+    plt.imshow(masks[i, :, :, 0], cmap="gray")
+    plt.title("True mask")
+    plt.axis("off")
+
+    plt.subplot(4, 3, i * 3 + 3)
+    plt.imshow(predictions[i, :, :, 0] >= 0.5, cmap="gray")
+    plt.title("Predicted mask")
+    plt.axis("off")
+
+plt.tight_layout()
+plt.show()
+
+model.save("oxford_pet_segmentation.keras")
+print("Segmentation model saved successfully.")
